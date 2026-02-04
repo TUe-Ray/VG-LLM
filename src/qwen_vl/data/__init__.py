@@ -8,58 +8,58 @@ CAMBRIAN_737K = {
 
 MP_DOC = {
     "annotation_path": "PATH_TO_MP_DOC_ANNOTATION",
-    "data_path": "PATH_TO_MP_DOC_DATA",
+    "data_path": "$FAST/PATH_TO_MP_DOC_DATA",
 }
 
 CLEVR_MC = {
     "annotation_path": "PATH_TO_CLEVR_MC_ANNOTATION",
-    "data_path": "PATH_TO_CLEVR_MC_DATA",
+    "data_path": "$FAST/PATH_TO_CLEVR_MC_DATA",
 }
 
 VIDEOCHATGPT = {
     "annotation_path": "PATH_TO_VIDEOCHATGPT_ANNOTATION",
-    "data_path": "PATH_TO_VIDEOCHATGPT_DATA",
+    "data_path": "$FAST/PATH_TO_VIDEOCHATGPT_DATA",
 }
 
 SPAR = {
     "annotation_path": "data/train/spar_7m.jsonl",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "3d"
 }
 
 SPAR_234K = {
     "annotation_path": "data/train/spar_234k.json",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "3d"
 }
 
 LLAVA_HOUND = {
     "annotation_path": "data/train/llava_hound_255k.json",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "2d"
 }
 
 LLAVA_HOUND_64K = {
     "annotation_path": "data/train/llava_hound_64k.json",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "2d"
 }
 
 SCANNET_DET = {
     "annotation_path": "data/train/scannet_det_train_4frames.json",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "3d"
 }
 
 SCANREFER = {
     "annotation_path": "data/train/scanrefer_train_32frames.json",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "3d"
 }
 
 SCAN2CAP = {
     "annotation_path": "data/train/scan2cap_train_32frames.json",
-    "data_path": "data/media",
+    "data_path": "$FAST/data/media",
     "tag": "3d"
 }
 
