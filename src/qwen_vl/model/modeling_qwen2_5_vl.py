@@ -1573,6 +1573,7 @@ QWEN2_5_VL_INPUTS_DOCSTRING = r"""
 """
 
 
+#INCOMPLETE: the model arch
 class Qwen2_5_VLForConditionalGenerationWithVGGT(Qwen2_5_VLPreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
     config_class = Qwen2_5_VLConfig
