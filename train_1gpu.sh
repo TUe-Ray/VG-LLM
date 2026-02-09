@@ -7,8 +7,8 @@
 #SBATCH --time=00:20:00
 #SBATCH --partition=boost_usr_prod  
 #SBATCH --qos=boost_qos_dbg     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
-#SBATCH --output=%x_%j.out
-#SBATCH --error=%x_%j.err
+#SBATCH --output=logs/train/%x_%j.out
+#SBATCH --error=logs/train/%x_%j.err
 
 
 #INCOMPLETE: 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
@@ -26,7 +26,7 @@ case "$HOSTNAME" in
   *leonardo*)
     echo "[INFO] Running on Leonardo cluster."
     module load cuda/12.6
-    module load autoload cudnn
+    module load cudnn
     module load profile/deeplrn
     ;;
   *)
