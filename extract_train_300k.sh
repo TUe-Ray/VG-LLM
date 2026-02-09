@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4                 # 解壓可吃到一些CPU(配合 pigz 會更有效)
-#SBATCH --time=12:00:00                   # 視資料量調整
+#SBATCH --time=4:00:00                   # 視資料量調整
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
