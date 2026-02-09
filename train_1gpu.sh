@@ -75,18 +75,18 @@ echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
 # ======================
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
 # ======================
-MODEL_PATH="Qwen/Qwen2.5-VL-7B-Instruct/"
+MODEL_PATH="$FAST/hf_models/qwen"  # [ModelArguments] Pretrained model path
 GEOMETRY_ENCODER_TYPE="vggt"
-GEOMETRY_ENCODER_PATH="facebook/VGGT-1B"
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt"
 
-OUTPUT_DIR="$WORK/logs/sr_run_${SLURM_JOB_ID}"
-CACHE_DIR="$WORK/cache/sr_run_${SLURM_JOB_ID}"
+OUTPUT_DIR="$FAST/hf_models/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$FAST/hf_models/cache"                        # [TrainingArguments] Cache directory for models
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 
 export WANDB_MODE=offline
 export NCCL_NVLS_ENABLE=0
-export WANDB_DIR="$WORK/wandb"     # 所有本地 wandb 檔案集中在 output_dir 裡
+export WANDB_DIR="$WORK/wandb"    
 export WANDB_CACHE_DIR="$WORK/wandb_cache"
 export WANDB_CONFIG_DIR="$WORK/wandb_config"
 mkdir -p "$WANDB_DIR" "$WANDB_CACHE_DIR" "$WANDB_CONFIG_DIR"
