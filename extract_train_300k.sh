@@ -1,14 +1,16 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 #SBATCH --job-name=extract_train300k
-#SBATCH --partition=lrd_all_serial        # (default) serial partition
+#SBATCH --partition=lrd_all_serial
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4                 # 解壓可吃到一些CPU(配合 pigz 會更有效)
-#SBATCH --time=4:00:00                   # 視資料量調整
-#SBATCH --output=logs/%x_%j.out
-#SBATCH --error=logs/%x_%j.err
-
+#SBATCH --cpus-per-task=4
+#SBATCH --time=04:00:00
+#SBATCH --mem=32G
+#SBATCH --array=0-15
+#SBATCH --output=logs/%x_%A_%a.out
+#SBATCH --error=logs/%x_%A_%a.err
+#SBATCH --account=<YOUR_ACCOUNT>
+#SBATCH --qos=<YOUR_QOS>
 
 set -euo pipefail
 
@@ -27,68 +29,62 @@ MARK="$VGLLM_DATA_ROOT/.extract_markers/train_300k"
 mkdir -p "$DST" "$MARK" logs
 
 echo "========================================"
-echo " ShareGPTVideo train_300k extraction"
-echo " Running on: $(hostname)"
-echo " SLURM job : ${SLURM_JOB_ID:-N/A}"
+echo " ShareGPTVideo train_300k extraction (ARRAY)"
+echo " Host      : $(hostname)"
+echo " Job ID    : ${SLURM_JOB_ID:-N/A}"
+echo " Array job : ${SLURM_ARRAY_JOB_ID:-N/A}"
+echo " Task ID   : ${SLURM_ARRAY_TASK_ID:-N/A}"
 echo " CPUs      : ${SLURM_CPUS_PER_TASK:-1}"
 echo " Source    : $SRC"
 echo " Target    : $DST"
 echo " Markers   : $MARK"
 echo "========================================"
 
-# choose decompressor
-TAR_OPT="-xzf"
-if command -v pigz >/dev/null 2>&1; then
-  # use pigz with threads = cpus-per-task (if set)
-  THREADS="${SLURM_CPUS_PER_TASK:-4}"
-  TAR_OPT="--use-compress-program=pigz -xf"
-  export PIGZ="-p ${THREADS}"
-  echo "[INFO] pigz found -> using parallel gzip (threads=${THREADS})"
-else
-  echo "[INFO] pigz not found -> using plain tar -xzf"
-fi
-
+# Build file list (sorted, stable)
 shopt -s nullglob
-files=("$SRC"/chunk_*.tar.gz)
-total="${#files[@]}"
-count=0
+mapfile -t files < <(ls -1 "$SRC"/chunk_*.tar.gz | sort)
 
+total="${#files[@]}"
 if [ "$total" -eq 0 ]; then
   echo "[ERROR] No chunk_*.tar.gz found in: $SRC"
   exit 2
 fi
 
-########################
-# Main loop
-########################
-for f in "${files[@]}"; do
-  bn=$(basename "$f")
-  count=$((count+1))
-  marker="$MARK/$bn.done"
+idx="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID not set}"
+if [ "$idx" -ge "$total" ]; then
+  echo "[INFO] Task $idx >= total files $total; nothing to do."
+  exit 0
+fi
 
-  if [ -f "$marker" ]; then
-    echo "[SKIP $count/$total] $bn (already done)"
-    continue
-  fi
+f="${files[$idx]}"
+bn="$(basename "$f")"
+marker="$MARK/$bn.done"
 
-  echo "----------------------------------------"
-  echo "[EXTRACT $count/$total] $bn"
-  echo "Size      : $(du -h "$f" | cut -f1)"
-  echo "Started at: $(date)"
+echo "[TASK] index=$idx / total=$total"
+echo "[FILE] $bn"
+echo "Size      : $(du -h "$f" | cut -f1)"
+echo "Started at: $(date)"
 
-  start=$(date +%s)
-  if tar $TAR_OPT "$f" -C "$DST"; then
-    touch "$marker"
-    end=$(date +%s)
-    echo "[OK] $bn extracted in $((end-start)) sec"
-  else
-    echo "[ERROR] Failed extracting $bn"
-    exit 1
-  fi
-done
+if [ -f "$marker" ]; then
+  echo "[SKIP] $bn (already done)"
+  exit 0
+fi
 
-echo "========================================"
-echo " All chunks processed!"
-echo " Finished at: $(date)"
-echo "========================================"
-EOF
+# choose decompressor
+TAR_CMD=(tar -xzf "$f" -C "$DST")
+if command -v pigz >/dev/null 2>&1; then
+  THREADS="${SLURM_CPUS_PER_TASK:-4}"
+  export PIGZ="-p ${THREADS}"
+  TAR_CMD=(tar --use-compress-program=pigz -xf "$f" -C "$DST")
+  echo "[INFO] pigz found -> using parallel gzip (threads=${THREADS})"
+else
+  echo "[INFO] pigz not found -> using plain tar -xzf"
+fi
+
+start=$(date +%s)
+"${TAR_CMD[@]}"
+touch "$marker"
+end=$(date +%s)
+
+echo "[OK] $bn extracted in $((end-start)) sec"
+echo "Finished at: $(date)"
