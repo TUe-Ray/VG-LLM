@@ -9,8 +9,8 @@
 #SBATCH --array=0-15
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
-#SBATCH --account=<YOUR_ACCOUNT>
-#SBATCH --qos=<YOUR_QOS>
+
+
 
 set -euo pipefail
 
