@@ -1,5 +1,5 @@
+#!/bin/bash
 
-#!/usr/bin/env bash
 #SBATCH --job-name=extract_train300k
 #SBATCH --partition=lrd_all_serial        # (default) serial partition
 #SBATCH --nodes=1
