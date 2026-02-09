@@ -131,7 +131,7 @@ srun --export=ALL \
     --master_addr="$MASTER_ADDR" \
     --master_port="$MASTER_PORT" \
     src/qwen_vl/train/train_qwen.py \
-      -- run_name "sr_run_${SLURM_JOB_ID}" \
+      --run_name "sr_run_${SLURM_JOB_ID}" \
       --model_name_or_path "$MODEL_PATH" \
       --tune_mm_llm True \
       --tune_mm_vision False \
