@@ -41,8 +41,6 @@ export PATH="$WORK/miniconda3/bin:$PATH"
 eval "$(conda shell.bash hook)"
 conda activate vgllmN
 
-export WANDB_MODE=offline
-export NCCL_NVLS_ENABLE=0
 
 # ======================
 # Distributed (Slurm-aware)
@@ -85,6 +83,14 @@ OUTPUT_DIR="$WORK/logs/sr_run_${SLURM_JOB_ID}"
 CACHE_DIR="$WORK/cache/sr_run_${SLURM_JOB_ID}"
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
+
+export WANDB_MODE=offline
+export NCCL_NVLS_ENABLE=0
+export WANDB_DIR="$WORK/wandb"     # 所有本地 wandb 檔案集中在 output_dir 裡
+export WANDB_CACHE_DIR="$WORK/wandb_cache"
+export WANDB_CONFIG_DIR="$WORK/wandb_config"
+mkdir -p "$WANDB_DIR" "$WANDB_CACHE_DIR" "$WANDB_CONFIG_DIR"
+
 DATASETS="spar_234k,llava_hound_64k"
 DATASETS="llava_hound_64k"
 
@@ -115,6 +121,8 @@ echo "[BATCH] GRADIENT_ACCUMULATION_STEPS=$GRADIENT_ACCUMULATION_STEPS"
 # ======================
 # ✅ 建議用 srun 包 torchrun：Slurm 會幫你把 rank/world size 管好
 # 這裡每個 node 啟 1 個 task（--ntasks-per-node=1），task 裡 torchrun 再起 NPROC_PER_NODE 個進程
+echo "========================================"
+echo " Starting training"
 srun --export=ALL \
   torchrun \
     --nnodes="$NNODES" \
@@ -123,6 +131,7 @@ srun --export=ALL \
     --master_addr="$MASTER_ADDR" \
     --master_port="$MASTER_PORT" \
     src/qwen_vl/train/train_qwen.py \
+      -- run_name "sr_run_${SLURM_JOB_ID}" \
       --model_name_or_path "$MODEL_PATH" \
       --tune_mm_llm True \
       --tune_mm_vision False \
@@ -158,7 +167,7 @@ srun --export=ALL \
       --dataloader_num_workers 4 \
       --group_by_modality_length true \
       --seed 0 \
-      --report_to "none" \
+      --report_to "wandb" \
       --use_geometry_encoder true \
       --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \

@@ -193,6 +193,26 @@ def train(attn_implementation="flash_attention_2"):
         (ModelArguments, DataArguments, TrainingArguments)
     )
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+
+    # ---------------- W&B logging ----------------
+    # Enable Weights & Biases logging via Hugging Face Trainer integration.
+    # This avoids manual wandb.init/log and is safe under DDP (only rank0 will log).
+    try:
+        report_to = getattr(training_args, "report_to", None)
+        # If user didn't specify any reporters, default to wandb
+        if report_to is None or report_to == [] or report_to == "none" or report_to == ["none"]:
+            training_args.report_to = ["wandb"]
+        # HF also accepts a single string; normalize to list for consistency
+        elif isinstance(report_to, str):
+            training_args.report_to = [report_to]
+
+        # Give W&B a sensible default run name (can still be overridden by --run_name)
+        if getattr(training_args, "run_name", None) in (None, ""):
+            training_args.run_name = Path(training_args.output_dir).name
+    except Exception:
+        # If TrainingArguments doesn't expose these fields in a custom fork, just skip.
+        pass
     
     # Set random seed for reproducible training
     # 設定隨機種子以實現可重現的訓練

@@ -1,15 +1,16 @@
 #!/bin/bash
 
-BASE_DIR="$WORK/logs/vgllm"  # 根據你的 launch_training.sh 裡的 FAST_DIR 修改
+
+WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb}"   # 你的 WANDB_DIR
 
 # Check if base directory exists
-if [ ! -d "$BASE_DIR" ]; then
-    echo "Error: Base directory $BASE_DIR does not exist."
+if [ ! -d "$WANDB_ROOT" ]; then
+    echo "Error: Base directory $WANDB_ROOT does not exist."
     exit 1
 fi
 
 # Change to base directory
-cd "$BASE_DIR" || exit 1
+cd "$WANDB_ROOT" || exit 1
 
 # Sync interval in seconds (default: 60 seconds)
 SYNC_INTERVAL=${SYNC_INTERVAL:-60}
@@ -17,7 +18,7 @@ SYNC_INTERVAL=${SYNC_INTERVAL:-60}
 # Handle Ctrl+C gracefully
 trap 'echo ""; echo "Stopping wandb sync..."; exit 0' INT TERM
 
-echo "Starting continuous wandb sync from $BASE_DIR"
+echo "Starting continuous wandb sync from $WANDB_ROOT"
 echo "Sync interval: ${SYNC_INTERVAL} seconds"
 echo "Press Ctrl+C to stop"
 echo "======================================"
