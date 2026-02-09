@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
+
 #SBATCH --job-name=extract_train300k
-#SBATCH --partition=dcgp_usr_prod
-#SBATCH --qos=normal
+#SBATCH --partition=lrd_all_serial
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=24:00:00
-#SBATCH --mem=8G
+#SBATCH --time=04:00:00
+#SBATCH --mem=30000M
 #SBATCH --array=0-15%4
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
