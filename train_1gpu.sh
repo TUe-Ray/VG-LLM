@@ -75,7 +75,7 @@ echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
 # ======================
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
 # ======================
-MODEL_PATH="$FAST/hf_models/qwen"  # [ModelArguments] Pretrained model path
+MODEL_PATH="$FAST/hf_models/qwen2_5"  # [ModelArguments] Pretrained model path
 GEOMETRY_ENCODER_TYPE="vggt"
 GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt"
 

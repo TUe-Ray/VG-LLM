@@ -230,7 +230,7 @@ def train(attn_implementation="flash_attention_2"):
 
     # Model loading logic - different paths for Qwen2.5VL vs Qwen2VL
     # 模型載入邏輯 - Qwen2.5VL 與 Qwen2VL 的不同路徑
-    if "qwen2.5" in model_args.model_name_or_path.lower():
+    if "qwen2_5" in model_args.model_name_or_path.lower():
         # Handle Qwen2.5VL model loading
         # 處理 Qwen2.5VL 模型載入
         if not model_args.use_geometry_encoder:
