@@ -30,6 +30,9 @@ while true; do
     echo "[$TIMESTAMP] Starting sync iteration..."
     echo "--------------------------------------"
     
+    # Initialize array to track synced runs
+    synced_runs=()
+    
     # Iterate through all subdirectories
     for experiment_dir in */; do
         # Remove trailing slash
@@ -65,12 +68,18 @@ while true; do
                 # Check if sync was successful
                 if [ $sync_exit_code -eq 0 ]; then
                     echo "  ✓ Successfully synced: $(basename $offline_run)"
+                    synced_runs+=("$(basename $offline_run)")
                 else
                     echo "  ✗ Failed to sync: $(basename $offline_run) (exit code: $sync_exit_code)"
                 fi
             fi
         done
     done
+    
+    # Print summary of synced runs
+    if [ ${#synced_runs[@]} -gt 0 ]; then
+        echo "Synced runs in this iteration: ${synced_runs[*]}"
+    fi
     
     echo "--------------------------------------"
     echo "[$TIMESTAMP] Sync iteration completed. Waiting ${SYNC_INTERVAL} seconds before next iteration..."
