@@ -1,68 +1,78 @@
-#!/usr/bin/env bash
-WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb}"   # 你的 WANDB_DIR
+#!/bin/bash
+
+
+WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb/wandb}"   # 指到「含有 offline-run-* 的那層」
 SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
-MARKER_FILE="${MARKER_FILE:-.wandb_synced}"
-DRY_RUN="${DRY_RUN:-0}"
+MARKER_FILE="${MARKER_FILE:-.wandb_synced}"  # 成功 sync 後寫 marker，避免重複 sync
 
-trap 'echo ""; echo "Stopping wandb sync..."; exit 0' INT TERM
-
+# Check if base directory exists
 if [ ! -d "$WANDB_ROOT" ]; then
-  echo "Error: WANDB_ROOT does not exist: $WANDB_ROOT"
-  exit 1
+    echo "Error: Base directory $WANDB_ROOT does not exist."
+    exit 1
 fi
 
-echo "Continuous wandb sync"
-echo "WANDB_ROOT: $WANDB_ROOT"
-echo "SYNC_INTERVAL: ${SYNC_INTERVAL}s"
-echo "DRY_RUN: $DRY_RUN"
+# Change to base directory
+cd "$WANDB_ROOT" || exit 1
+
+# Handle Ctrl+C gracefully
+trap 'echo ""; echo "Stopping wandb sync..."; exit 0' INT TERM
+
+echo "Starting continuous wandb sync from $WANDB_ROOT"
+echo "Sync interval: ${SYNC_INTERVAL} seconds"
+echo "Press Ctrl+C to stop"
 echo "======================================"
 echo ""
 
-sync_one () {
-  local run_dir="$1"
+# If no matching dirs, glob expands to nothing (instead of literal pattern)
+shopt -s nullglob
 
-  # 已同步過就跳過，避免一直重複打 API
-  if [ -f "$run_dir/$MARKER_FILE" ]; then
-    return 0
-  fi
-
-  echo "Syncing: $run_dir"
-  if [ "$DRY_RUN" = "1" ]; then
-    echo "(dry-run) wandb sync \"$run_dir\""
-    return 0
-  fi
-
-  set +e
-  wandb sync "$run_dir" 2>&1 | sed '/^wandb: /d'
-  local code=${PIPESTATUS[0]}
-  set -e
-
-  if [ "$code" -eq 0 ]; then
-    echo "✓ Synced: $(basename "$run_dir")"
-    touch "$run_dir/$MARKER_FILE" || true
-  else
-    echo "✗ Failed: $(basename "$run_dir") (exit code: $code)"
-  fi
-}
-
+# Continuous loop
 while true; do
-  TS=$(date '+%Y-%m-%d %H:%M:%S')
-  echo "[$TS] Scan & sync..."
+    TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$TIMESTAMP] Starting sync iteration..."
+    echo "--------------------------------------"
 
-  # 找 offline-run-* 與 run-*
-  mapfile -d '' runs < <(
-    find "$WANDB_ROOT" -maxdepth 1 -mindepth 1 -type d \( -name "offline-run-*" -o -name "run-*" \) -print0 2>/dev/null
-  )
+    synced_runs=()
 
-  if [ "${#runs[@]}" -eq 0 ]; then
-    echo "No runs found in $WANDB_ROOT"
-  else
-    for r in "${runs[@]}"; do
-      sync_one "$r"
-    done
-  fi
+    # Find offline run directories directly under WANDB_ROOT
+    run_dirs=(offline-run-* run-*)
 
-  echo "Sleep ${SYNC_INTERVAL}s..."
-  echo ""
-  sleep "$SYNC_INTERVAL"
+    if [ ${#run_dirs[@]} -eq 0 ]; then
+        echo "No offline runs found under $WANDB_ROOT (expected offline-run-* or run-*)."
+    else
+        for run_dir in "${run_dirs[@]}"; do
+            [ -d "$run_dir" ] || continue
+
+            # Skip if already synced successfully before
+            if [ -f "$run_dir/$MARKER_FILE" ]; then
+                continue
+            fi
+
+            echo "Syncing: $run_dir"
+
+            # Temporarily disable exit on error to ensure we continue processing
+            set +e
+            wandb sync "$run_dir" 2>&1 | grep -v "^wandb:"
+            sync_exit_code=${PIPESTATUS[0]}
+            set -e
+
+            if [ $sync_exit_code -eq 0 ]; then
+                echo "  ✓ Successfully synced: $(basename "$run_dir")"
+                synced_runs+=("$(basename "$run_dir")")
+                # mark as synced to avoid repeated syncing
+                touch "$run_dir/$MARKER_FILE" || true
+            else
+                echo "  ✗ Failed to sync: $(basename "$run_dir") (exit code: $sync_exit_code)"
+            fi
+        done
+    fi
+
+    if [ ${#synced_runs[@]} -gt 0 ]; then
+        echo "Synced runs in this iteration: ${synced_runs[*]}"
+    fi
+
+    echo "--------------------------------------"
+    echo "[$TIMESTAMP] Sync iteration completed. Waiting ${SYNC_INTERVAL} seconds before next iteration..."
+    echo ""
+    sleep "$SYNC_INTERVAL"
 done
