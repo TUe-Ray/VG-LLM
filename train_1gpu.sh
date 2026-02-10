@@ -102,7 +102,7 @@ LR="1e-5"
 PER_DEVICE_BS="${PER_DEVICE_BS:-1}"
 TOTAL_BATCH_SIZE="${TOTAL_BATCH_SIZE:-$((WORLD_SIZE * PER_DEVICE_BS))}"
 
-# ✅ 正確關係：
+
 # global_batch = WORLD_SIZE * PER_DEVICE_BS * GRAD_ACC
 # => GRAD_ACC = TOTAL_BATCH_SIZE / (WORLD_SIZE * PER_DEVICE_BS)
 denom=$((WORLD_SIZE * PER_DEVICE_BS))
@@ -115,6 +115,10 @@ fi
 echo "[BATCH] PER_DEVICE_BS=$PER_DEVICE_BS"
 echo "[BATCH] TOTAL_BATCH_SIZE=$TOTAL_BATCH_SIZE"
 echo "[BATCH] GRADIENT_ACCUMULATION_STEPS=$GRADIENT_ACCUMULATION_STEPS"
+
+# PyTorch CUDA memory management optimization
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 
 # ======================
 # Launch training
