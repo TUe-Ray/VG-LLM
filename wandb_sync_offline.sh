@@ -3,6 +3,7 @@
 
 WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb/wandb}"   # 指到「含有 offline-run-* 的那層」
 SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
+ACTIVE_MINUTES="${ACTIVE_MINUTES:-5}"
 
 # Load wandb credentials
 if [ -f "$HOME/.wandb_env" ]; then
@@ -47,39 +48,44 @@ while true; do
 
     synced_runs=()
 
-    # Find offline run directories directly under WANDB_ROOT
-    run_dirs=(offline-run-* run-*)
+    # ---- Only sync runs updated recently ----
+    ACTIVE_MINUTES="${ACTIVE_MINUTES:-5}"
 
-    if [ ${#run_dirs[@]} -eq 0 ]; then
-        echo "No offline runs found under $WANDB_ROOT (expected offline-run-* or run-*)."
+    mapfile -d '' active_runs < <(
+      find "$WANDB_ROOT" -maxdepth 1 -mindepth 1 -type d -name "offline-run-*" -print0 \
+      | while IFS= read -r -d '' d; do
+          # If any file inside run was modified in last ACTIVE_MINUTES minutes
+          if find "$d" -type f -mmin "-$ACTIVE_MINUTES" -print -quit | grep -q .; then
+            printf '%s\0' "$d"
+          fi
+        done
+    )
+
+    if [ ${#active_runs[@]} -eq 0 ]; then
+        echo "No active runs updated in last ${ACTIVE_MINUTES} minutes."
     else
-        for run_dir in "${run_dirs[@]}"; do
-            [ -d "$run_dir" ] || continue
+        for run_dir in "${active_runs[@]}"; do
+            echo "Syncing active run: $(basename "$run_dir")"
 
-
-            echo "Syncing: $run_dir"
-
-            # Temporarily disable exit on error to ensure we continue processing
             set +e
             wandb sync "$run_dir" 2>&1 | grep -v "^wandb:"
             sync_exit_code=${PIPESTATUS[0]}
             set -e
 
             if [ $sync_exit_code -eq 0 ]; then
-                echo "  ✓ Successfully synced: $(basename "$run_dir")"
                 synced_runs+=("$(basename "$run_dir")")
             else
-                echo "  ✗ Failed to sync: $(basename "$run_dir") (exit code: $sync_exit_code)"
+                echo "  ✗ Failed (exit code: $sync_exit_code)"
             fi
         done
     fi
 
     if [ ${#synced_runs[@]} -gt 0 ]; then
-        echo "Synced runs in this iteration: ${synced_runs[*]}"
+        echo "Synced runs: ${synced_runs[*]}"
     fi
 
     echo "--------------------------------------"
-    echo "[$TIMESTAMP] Sync iteration completed. Waiting ${SYNC_INTERVAL} seconds before next iteration..."
+    echo "[$TIMESTAMP] Waiting ${SYNC_INTERVAL} seconds..."
     echo ""
     sleep "$SYNC_INTERVAL"
 done
