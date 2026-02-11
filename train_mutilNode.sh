@@ -1,20 +1,12 @@
 #!/bin/bash
-NUM_NODES=2
-GPUS_PER_NODE=4
-CPUS_PER_TASK=$((NUM_NODES * GPUS_PER_NODE * 8))  # 每個 GPU 分配的 CPU 核心數
-PARTITION="boost_usr_prod"
-QOS="boost_qos_dbg"  # normal/boost_qos_dbg/boost_qos 
-TIME="00:30:00"
-JOB_NAME="test_multinode" 
-
-#SBATCH --job-name=$JOB_NAME
-#SBATCH --nodes=$NUM_NODES
-#SBATCH --gpus-per-node=$GPUS_PER_NODE             # 依你的叢集格式：也可能是 --gpus-per-node=1
+#SBATCH --job-name=multinode_train
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
-#SBATCH --cpus-per-task=$CPUS_PER_TASK
-#SBATCH --time=$TIME
-#SBATCH --partition=$PARTITION
-#SBATCH --qos=$QOS     
+#SBATCH --cpus-per-task=8
+#SBATCH --time=00:30:00
+#SBATCH --partition=boost_usr_prod  
+#SBATCH --qos=boost_qos_dbg     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 
@@ -70,7 +62,7 @@ else
 fi
 
 NNODES="${SLURM_JOB_NUM_NODES:-1}"
-NODE_RANK="${SLURM_NODEID:-0}"
+NODE_RANK=${SLURM_NODEID}
 WORLD_SIZE=$((NNODES * NPROC_PER_NODE))
 
 export MASTER_ADDR MASTER_PORT
