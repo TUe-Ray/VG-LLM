@@ -17,6 +17,23 @@
 # #SBATCH --exclusive
 
 
+echo "=== SLURM Job Specifications ==="
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Number of Nodes: $SLURM_JOB_NUM_NODES"
+echo "Node List: $SLURM_JOB_NODELIST"
+echo "GPUs per Node: $SLURM_GPUS_PER_NODE"
+echo "CPUs per Task: $SLURM_CPUS_PER_TASK"
+echo "Tasks per Node: $SLURM_NTASKS_PER_NODE"
+echo "Partition: $SLURM_JOB_PARTITION"
+echo "QOS: $SLURM_JOB_QOS"
+echo "Time Limit: $SLURM_TIME_LIMIT"
+echo "Memory per Node: $SLURM_MEM_PER_NODE"
+echo "Output: $SLURM_STDOUT"
+echo "Error: $SLURM_STDERR"
+echo "=============================="
+
+
 set -euo pipefail
 
 # ======================
