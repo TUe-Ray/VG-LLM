@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=debug
+#SBATCH --job-name=debug_mutinode
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -9,7 +9,7 @@
 #SBATCH --qos=boost_qos_dbg     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
-#SBATCH --mem=200G
+#SBATCH --mem=512GB
 
 
 #INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
@@ -171,7 +171,7 @@ srun --export=ALL \
     --rdzv_backend=c10d \
     --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
     src/qwen_vl/train/train_qwen.py \
-      --run_name "sr_run_${SLURM_JOB_ID}" \
+      --run_name "${SLURM_JOB_NAME}_${SLURM_JOB_ID}" \
       --model_name_or_path "$MODEL_PATH" \
       --tune_mm_llm True \
       --tune_mm_vision False \
