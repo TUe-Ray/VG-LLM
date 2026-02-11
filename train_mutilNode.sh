@@ -9,9 +9,10 @@
 #SBATCH --qos=boost_qos_dbg     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
+#SBATCH --mem=200G
 
 
-#INCOMPLETE: 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
+#INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
 # 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
 # #SBATCH --exclusive
 
@@ -126,6 +127,20 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export NCCL_DEBUG=INFO
 
 
+
+echo "========================================"
+echo " Pre-flight check"
+
+srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
+  echo "===== NODE $(hostname) ====="
+  free -h
+  grep -E "MemTotal|MemAvailable" /proc/meminfo
+  nvidia-smi -L
+  echo "cgroup memory.max: $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo NA)"
+'
+
+
+
 # ======================
 # Launch training
 # ======================
@@ -174,7 +189,7 @@ srun --export=ALL \
       --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
-      --dataloader_num_workers 4 \
+      --dataloader_num_workers 1 \
       --group_by_modality_length true \
       --seed 0 \
       --report_to "wandb" \
