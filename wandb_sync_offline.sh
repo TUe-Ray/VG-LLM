@@ -3,7 +3,20 @@
 
 WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb/wandb}"   # 指到「含有 offline-run-* 的那層」
 SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
-MARKER_FILE="${MARKER_FILE:-.wandb_synced}"  # 成功 sync 後寫 marker，避免重複 sync
+
+# Load wandb credentials
+if [ -f "$HOME/.wandb_env" ]; then
+    source "$HOME/.wandb_env"
+else
+    echo "Error: ~/.wandb_env not found."
+    exit 1
+fi
+
+# Ensure API key is set
+if [ -z "${WANDB_API_KEY:-}" ]; then
+    echo "Error: WANDB_API_KEY is not set."
+    exit 1
+fi
 
 # Check if base directory exists
 if [ ! -d "$WANDB_ROOT" ]; then
@@ -43,10 +56,6 @@ while true; do
         for run_dir in "${run_dirs[@]}"; do
             [ -d "$run_dir" ] || continue
 
-            # Skip if already synced successfully before
-            if [ -f "$run_dir/$MARKER_FILE" ]; then
-                continue
-            fi
 
             echo "Syncing: $run_dir"
 
@@ -59,8 +68,6 @@ while true; do
             if [ $sync_exit_code -eq 0 ]; then
                 echo "  ✓ Successfully synced: $(basename "$run_dir")"
                 synced_runs+=("$(basename "$run_dir")")
-                # mark as synced to avoid repeated syncing
-                touch "$run_dir/$MARKER_FILE" || true
             else
                 echo "  ✗ Failed to sync: $(basename "$run_dir") (exit code: $sync_exit_code)"
             fi
