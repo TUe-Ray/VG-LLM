@@ -175,7 +175,7 @@ def set_model(model_args, model):
             p.requires_grad = False
 
 def train(attn_implementation="flash_attention_2"):
-    """
+    """`
     Main training function that handles model loading, data preparation, and training execution.
     處理模型載入、資料準備和訓練執行的主要訓練函式。
     Supports both Qwen2VL and Qwen2.5VL with optional geometry encoder integration.

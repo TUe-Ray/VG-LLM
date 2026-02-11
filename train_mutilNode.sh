@@ -51,6 +51,8 @@ MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 # MASTER_PORT=${MASTER_PORT:-29500}
 # INCOMPLETE: shuffle for official training
 MASTER_PORT=$(shuf -i 20000-29999 -n 1)
+MASTER_PORT=29500
+
 
 # NPROC_PER_NODE：用 Slurm 提供的 GPU 數，沒有就 fallback 到 nvidia-smi
 if [ -n "${SLURM_GPUS_ON_NODE:-}" ]; then
@@ -119,6 +121,10 @@ echo "[BATCH] GRADIENT_ACCUMULATION_STEPS=$GRADIENT_ACCUMULATION_STEPS"
 # PyTorch CUDA memory management optimization
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
+# INCOMPLETE: debug info
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export NCCL_DEBUG=INFO
+
 
 # ======================
 # Launch training
@@ -129,11 +135,11 @@ echo "========================================"
 echo " Starting training"
 srun --export=ALL \
   torchrun \
-    --nnodes="$NNODES" \
+    --nnodes="$SLURM_JOB_NUM_NODES" \
     --nproc_per_node="$NPROC_PER_NODE" \
-    --node_rank="$NODE_RANK" \
-    --master_addr="$MASTER_ADDR" \
-    --master_port="$MASTER_PORT" \
+    --rdzv_id="$SLURM_JOB_ID" \
+    --rdzv_backend=c10d \
+    --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
     src/qwen_vl/train/train_qwen.py \
       --run_name "sr_run_${SLURM_JOB_ID}" \
       --model_name_or_path "$MODEL_PATH" \
