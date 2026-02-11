@@ -5,8 +5,8 @@
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
 #SBATCH --cpus-per-task=8
 #SBATCH --time=00:20:00
-#SBATCH --partition=normal
-#SBATCH --qos=boost_qos_dbg     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --partition=boost_usr_prod  
+#SBATCH --qos=normal     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 
