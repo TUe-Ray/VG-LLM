@@ -5,7 +5,7 @@ CPUS_PER_TASK=$((NUM_NODES * GPUS_PER_NODE * 8))  # 每個 GPU 分配的 CPU 核
 PARTITION="boost_usr_prod"
 QOS="boost_qos_dbg"  # normal/boost_qos_dbg/boost_qos 
 TIME="00:30:00"
-JOB_NAME="sr_train" 
+JOB_NAME="test_multinode" 
 
 #SBATCH --job-name=$JOB_NAME
 #SBATCH --nodes=$NUM_NODES
