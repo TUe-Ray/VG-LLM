@@ -9,7 +9,7 @@
 #SBATCH --qos=normal     # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
-#SBATCH --mem=512GB
+#SBATCH --mem=500GB
 
 
 #INCOMPLETE: 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
