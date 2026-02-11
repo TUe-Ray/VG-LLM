@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=debug
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
 #SBATCH --cpus-per-task=8
@@ -43,6 +43,19 @@ echo "[DEBUG] after conda activate:"
 nvidia-smi -L || true
 echo "[DEBUG] LD_LIBRARY_PATH after conda:"
 echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
+
+echo "==== multi-node NVML sanity check ===="
+srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
+  echo "===== $(hostname) ====="
+  which nvidia-smi || true
+  nvidia-smi -L || true
+  echo "--- /proc/driver/nvidia/version ---"
+  cat /proc/driver/nvidia/version 2>/dev/null | head -n 5 || true
+  echo "--- LD_LIBRARY_PATH (top) ---"
+  echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 20
+'
+echo "======================================"
+
 
 
 # ======================
