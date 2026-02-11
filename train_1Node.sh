@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=sr_train
 #SBATCH --nodes=1
-#SBATCH --gpus-per-node=1             # 依你的叢集格式：也可能是 --gpus-per-node=1
+#SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=4       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
 #SBATCH --cpus-per-task=8
 #SBATCH --time=00:20:00
