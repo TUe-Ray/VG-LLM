@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=debug_4nodes
-#SBATCH --nodes=4
+#SBATCH --job-name=read_nvSmi_2nodes
+#SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
 #SBATCH --cpus-per-task=8
-#SBATCH --time=00:30:00
+#SBATCH --time=00:20:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=normal    # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=boost_qos_dbg    # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
@@ -185,7 +185,7 @@ srun --export=ALL \
     --nnodes="$SLURM_JOB_NUM_NODES" \
     --nproc_per_node="$NPROC_PER_NODE" \
     --rdzv_id="$SLURM_JOB_ID" \
-    --rdzv_backend=c10d \
+    --rdzv_backend=c10d \ 
     --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
     src/qwen_vl/train/train_qwen.py \
       --run_name "${SLURM_JOB_NAME}_${SLURM_JOB_ID}" \
@@ -221,7 +221,7 @@ srun --export=ALL \
       --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
-      --dataloader_num_workers 4 \
+      --dataloader_num_workers 1 \
       --group_by_modality_length true \
       --seed 0 \
       --report_to "wandb" \

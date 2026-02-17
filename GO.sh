@@ -2,6 +2,9 @@
 
 git pull
 Job="debug.sh"
-echo "Launching training job with sbatch $Job"
+
+echo "======================================"
+echo " run $Job "
+echo "======================================"
 
 sbatch $Job
