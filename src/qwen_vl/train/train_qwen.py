@@ -242,6 +242,8 @@ def train(attn_implementation="flash_attention_2"):
                 cache_dir=training_args.cache_dir,
                 attn_implementation=attn_implementation,#ATTN2
                 torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
+                low_cpu_mem_usage=True,
+                use_safetensors=True,
             )
         else:
             # Qwen2.5VL with integrated geometry encoder (VGGT)
@@ -283,7 +285,9 @@ def train(attn_implementation="flash_attention_2"):
                 cache_dir=training_args.cache_dir,
                 attn_implementation=attn_implementation,
                 torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
-                geometry_encoder_path=model_args.geometry_encoder_path
+                geometry_encoder_path=model_args.geometry_encoder_path,
+                low_cpu_mem_usage=True,
+                use_safetensors=True,
             )
 
         # Set up image processor and model type for Qwen2.5VL
@@ -291,6 +295,7 @@ def train(attn_implementation="flash_attention_2"):
         # 用 AutoProcessor 是因為 Qwen2.5-VL 的 processor 打包了影像處理與一些規則。
         data_args.image_processor = AutoProcessor.from_pretrained(
             model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
         ).image_processor
         data_args.model_type = "qwen2.5vl"
     else:
@@ -301,6 +306,8 @@ def train(attn_implementation="flash_attention_2"):
             cache_dir=training_args.cache_dir,
             attn_implementation=attn_implementation,
             torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
+            low_cpu_mem_usage=True,
+            use_safetensors=True,
         )
         
         # Set up image processor and model type for Qwen2VL
@@ -357,7 +364,8 @@ def train(attn_implementation="flash_attention_2"):
 
     # Print trainable parameter information from rank 0 only
     # 僅從排名0列印可訓練參數資訊
-    if torch.distributed.get_rank() == 0:
+    #這樣的效果是：分散式已初始化 → 只有 rank0 印；單卡/未初始化 → 也能印（不會爆）
+    if (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or (torch.distributed.get_rank() == 0):
         model.visual.print_trainable_parameters()
         model.model.print_trainable_parameters()
 

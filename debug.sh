@@ -194,7 +194,7 @@ echo " Starting training"
 srun --export=ALL \
   torchrun \
     --nnodes="$SLURM_JOB_NUM_NODES" \
-    --nproc_per_node=2 \
+    --nproc_per_node=$NPROC_PER_NODE \
     --rdzv_id="$SLURM_JOB_ID" \
     --rdzv_backend=c10d \
     --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
