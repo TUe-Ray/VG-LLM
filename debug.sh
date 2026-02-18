@@ -50,7 +50,18 @@ module load cudnn
 module load profile/deeplrn
 
 echo "[DEBUG] after modules:"
-nvidia-smi -L || true
+OUT=$(nvidia-smi -L 2>&1) || {
+  echo "[ERROR] nvidia-smi failed on $(hostname)"
+  echo "$OUT"
+  exit 1
+}
+if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+  echo "[ERROR] NVML mismatch on $(hostname)"
+  echo "$OUT"
+  exit 1
+fi
+echo "$OUT"
+
 echo "[DEBUG] LD_LIBRARY_PATH after modules:"
 echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
 
@@ -59,51 +70,68 @@ eval "$(conda shell.bash hook)"
 conda activate vgllmN
 
 echo "[DEBUG] after conda activate:"
-nvidia-smi -L || true
+OUT=$(nvidia-smi -L 2>&1) || {
+  echo "[ERROR] nvidia-smi failed on $(hostname) after conda"
+  echo "$OUT"
+  exit 1
+}
+if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+  echo "[ERROR] NVML mismatch on $(hostname) after conda"
+  echo "$OUT"
+  exit 1
+fi
+echo "$OUT"
+
 echo "[DEBUG] LD_LIBRARY_PATH after conda:"
 echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
 
+
+# echo "==== multi-node NVML sanity check ===="
+# srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
+#   echo "===== $(hostname) ====="
+#   which nvidia-smi || true
+#   nvidia-smi -L || true
+#   echo "--- /proc/driver/nvidia/version ---"
+#   cat /proc/driver/nvidia/version 2>/dev/null | head -n 5 || true
+#   echo "--- LD_LIBRARY_PATH (top) ---"
+#   echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 20
+# '
+# echo "======================================"
 echo "======================================"
-echo " Multi-node NVML health check (fail-fast)"
-echo "======================================"
-
-BAD_NODES=$(srun --ntasks=$SLURM_JOB_NUM_NODES \
-                 --ntasks-per-node=1 \
-                 --export=ALL \
-                 bash -lc '
-echo "===== NODE $(hostname) ====="
-
-OUT=$(nvidia-smi 2>&1 || true)
-echo "$OUT"
-
-echo "--- /proc/driver/nvidia/version ---"
-cat /proc/driver/nvidia/version 2>/dev/null | head -n 5 || true
-
-echo "--- LD_LIBRARY_PATH (top) ---"
-echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 20
-
-if echo "$OUT" | grep -q "Driver/library version mismatch"; then
-    echo "[BAD] $(hostname)"
-fi
-' | grep "\[BAD\]" | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
-
+echo " Per-node NVML health check"
 echo "======================================"
 
-if [ -n "${BAD_NODES:-}" ]; then
-    echo ""
-    echo "❌ NVML mismatch detected on nodes:"
-    echo "   $BAD_NODES"
-    echo ""
-    echo "👉 You can exclude them next time with:"
-    echo "   #SBATCH --exclude=$BAD_NODES"
-    echo ""
-    echo "Aborting before training."
+# 展開本次 allocation 的 node 清單
+NODE_LIST=$(scontrol show hostnames "$SLURM_JOB_NODELIST")
+
+for NODE in $NODE_LIST; do
+  echo "----- Checking $NODE -----"
+
+  OUT=$(srun -N1 -n1 -w "$NODE" bash -lc 'nvidia-smi -L' 2>&1)
+  RET=$?
+
+  if [ $RET -ne 0 ]; then
+    echo "[ERROR] nvidia-smi failed on $NODE"
+    echo "$OUT"
+    echo "Aborting job."
     exit 1
-fi
+  fi
 
-echo "✅ All nodes passed NVML check."
+  if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+    echo "[ERROR] NVML mismatch detected on $NODE"
+    echo "$OUT"
+    echo "You may exclude it next time with:"
+    echo "#SBATCH --exclude=$NODE"
+    echo "Aborting job."
+    exit 1
+  fi
+
+  echo "$OUT"
+  echo "Node $NODE OK"
+done
+
+echo "All nodes passed NVML check."
 echo "======================================"
-
 
 
 
