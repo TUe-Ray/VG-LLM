@@ -221,7 +221,7 @@ srun --export=ALL \
       --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
-      --dataloader_num_workers 1 \
+      --dataloader_num_workers 0 \
       --group_by_modality_length true \
       --seed 0 \
       --report_to "wandb" \
