@@ -11,6 +11,8 @@
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 #SBATCH --exclusive
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400
+
 
 #INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
 # 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
@@ -61,17 +63,47 @@ nvidia-smi -L || true
 echo "[DEBUG] LD_LIBRARY_PATH after conda:"
 echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
 
-echo "==== multi-node NVML sanity check ===="
-srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
-  echo "===== $(hostname) ====="
-  which nvidia-smi || true
-  nvidia-smi -L || true
-  echo "--- /proc/driver/nvidia/version ---"
-  cat /proc/driver/nvidia/version 2>/dev/null | head -n 5 || true
-  echo "--- LD_LIBRARY_PATH (top) ---"
-  echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 20
-'
 echo "======================================"
+echo " Multi-node NVML health check (fail-fast)"
+echo "======================================"
+
+BAD_NODES=$(srun --ntasks=$SLURM_JOB_NUM_NODES \
+                 --ntasks-per-node=1 \
+                 --export=ALL \
+                 bash -lc '
+echo "===== NODE $(hostname) ====="
+
+OUT=$(nvidia-smi 2>&1 || true)
+echo "$OUT"
+
+echo "--- /proc/driver/nvidia/version ---"
+cat /proc/driver/nvidia/version 2>/dev/null | head -n 5 || true
+
+echo "--- LD_LIBRARY_PATH (top) ---"
+echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 20
+
+if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+    echo "[BAD] $(hostname)"
+fi
+' | grep "\[BAD\]" | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
+
+echo "======================================"
+
+if [ -n "${BAD_NODES:-}" ]; then
+    echo ""
+    echo "❌ NVML mismatch detected on nodes:"
+    echo "   $BAD_NODES"
+    echo ""
+    echo "👉 You can exclude them next time with:"
+    echo "   #SBATCH --exclude=$BAD_NODES"
+    echo ""
+    echo "Aborting before training."
+    exit 1
+fi
+
+echo "✅ All nodes passed NVML check."
+echo "======================================"
+
 
 
 
