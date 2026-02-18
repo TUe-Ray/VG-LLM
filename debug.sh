@@ -10,11 +10,11 @@
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
-
+#SBATCH --exclusive
 
 #INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
 # 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
-# #SBATCH --exclusive
+
 
 
 echo "=== SLURM Job Specifications ==="
