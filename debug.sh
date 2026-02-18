@@ -3,7 +3,7 @@
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
-#SBATCH --cpus-per-task=6
+#SBATCH --cpus-per-task=8
 #SBATCH --time=00:30:00
 #SBATCH --partition=boost_usr_prod  
 #SBATCH --qos=boost_qos_dbg    # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
@@ -173,6 +173,17 @@ srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
 
 
 
+#=======================
+srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
+  echo "[$(hostname)] start mem monitor"
+  for i in $(seq 1 120); do
+    echo "[$(hostname)] $(date +%H:%M:%S) $(free -h | awk "/Mem:/ {print \$3\"/\"\$2\" used, avail=\"\$7}")"
+    sleep 1
+  done
+' &
+
+
+
 # ======================
 # Launch training
 # ======================
@@ -183,7 +194,7 @@ echo " Starting training"
 srun --export=ALL \
   torchrun \
     --nnodes="$SLURM_JOB_NUM_NODES" \
-    --nproc_per_node="$NPROC_PER_NODE" \
+    --nproc_per_node=2 \
     --rdzv_id="$SLURM_JOB_ID" \
     --rdzv_backend=c10d \
     --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
