@@ -1,7 +1,7 @@
 import json
-import random
+import os
 from pathlib import Path
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 GROUP_PREFIXES = {
     "scannet": "spar/scannet/",
@@ -10,129 +10,81 @@ GROUP_PREFIXES = {
     "rxr": "rxr/",
 }
 
-def iter_items(annotation_path: str):
-    p = Path(annotation_path)
-    if p.suffix == ".jsonl":
-        with p.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    yield json.loads(line)
-    else:
-        with p.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, list):
-            raise ValueError("JSON file should contain a list of items")
-        for x in data:
-            yield x
-
-def get_paths(item):
-    """Return a list of media paths from an item."""
-    if "images" in item and isinstance(item["images"], list):
-        return [p for p in item["images"] if isinstance(p, str)]
-    if "video" in item and isinstance(item["video"], str):
-        return [item["video"]]
-    # fallback common single fields
-    for k in ("image", "file", "path"):
-        if isinstance(item.get(k), str):
-            return [item[k]]
-    return []
-
-def infer_group(item):
-    """Infer which group this item belongs to, by media path prefixes."""
-    paths = get_paths(item)
-    for p in paths:
-        for g, pref in GROUP_PREFIXES.items():
-            if p.startswith(pref):
-                return g
-    # 如果你的 rxr 路徑不是 "rxr/..."，可以在這裡補規則
+def infer_group_from_path(p: str) -> str:
+    for g, pref in GROUP_PREFIXES.items():
+        if p.startswith(pref):
+            return g
     return "unknown"
 
-def stratified_sample(items, per_group=None, total=None, seed=42):
-    """
-    per_group: dict like {"scannet": 1000, "rxr": 500, ...}
-    total: if set, sample total size proportional to group sizes (excluding unknown by default)
-    """
-    rng = random.Random(seed)
-    buckets = defaultdict(list)
-    for it in items:
-        buckets[infer_group(it)].append(it)
+def check_missing_by_source(annotation_path, data_root):
+    data_root = Path(data_root)
 
-    # Print counts
-    print("Counts by group:")
-    for g in ["scannet", "scannetpp", "structured3d", "rxr", "unknown"]:
-        print(f"  {g:12s}: {len(buckets.get(g, []))}")
+    # load json list
+    with open(annotation_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert isinstance(data, list)
 
-    sampled = []
+    # stats
+    files_total = Counter()     # per group: total referenced files
+    files_missing = Counter()   # per group: missing files
+    items_total = Counter()     # per group: number of items
+    items_any_missing = Counter()  # per group: items with >=1 missing file
 
-    if per_group:
-        for g, k in per_group.items():
-            pool = buckets.get(g, [])
-            if not pool:
-                print(f"[WARN] group '{g}' has 0 items; skip")
+    missing_examples = defaultdict(list)  # group -> list of (id, path)
+
+    for item in data:
+        item_id = item.get("id", "<no-id>")
+
+        paths = item.get("images", [])
+        if not isinstance(paths, list) or not paths:
+            # 沒有 images 的項目也算到 unknown
+            items_total["unknown"] += 1
+            items_any_missing["unknown"] += 1
+            continue
+
+        # group 用第一個 path 判（你的資料很乾淨，會一致）
+        g = infer_group_from_path(paths[0])
+        items_total[g] += 1
+
+        any_miss = False
+        for rel in paths:
+            if not isinstance(rel, str):
                 continue
-            kk = min(k, len(pool))
-            sampled.extend(rng.sample(pool, kk))
-        return sampled
+            files_total[g] += 1
+            full = (Path(rel) if Path(rel).is_absolute() else data_root / rel)
+            if not full.exists():
+                files_missing[g] += 1
+                any_miss = True
+                if len(missing_examples[g]) < 10:
+                    missing_examples[g].append((item_id, rel))
 
-    if total is not None:
-        # proportional sampling across known groups
-        known_groups = ["scannet", "scannetpp", "structured3d", "rxr"]
-        pools = {g: buckets.get(g, []) for g in known_groups}
-        sizes = {g: len(pools[g]) for g in known_groups}
-        s_sum = sum(sizes.values())
-        if s_sum == 0:
-            print("[ERROR] No known-group items found.")
-            return []
+        if any_miss:
+            items_any_missing[g] += 1
 
-        # initial allocation
-        alloc = {g: int(total * sizes[g] / s_sum) for g in known_groups}
-        # fix rounding to match total
-        remainder = total - sum(alloc.values())
-        # distribute remainder to largest pools
-        for g in sorted(known_groups, key=lambda x: sizes[x], reverse=True):
-            if remainder <= 0:
-                break
-            alloc[g] += 1
-            remainder -= 1
+    # print report
+    groups = ["scannet", "scannetpp", "structured3d", "rxr", "unknown"]
+    print(f"Annotation: {annotation_path}")
+    print(f"Data root:  {data_root}\n")
 
-        for g in known_groups:
-            pool = pools[g]
-            if pool and alloc[g] > 0:
-                sampled.extend(rng.sample(pool, min(alloc[g], len(pool))))
-        return sampled
+    print("Per-source file missing stats:")
+    print("-" * 72)
+    print(f"{'group':12s} {'items':>8s} {'items_miss':>10s} {'files':>10s} {'missing':>10s} {'miss%':>8s}")
+    for g in groups:
+        tot_f = files_total[g]
+        miss_f = files_missing[g]
+        miss_pct = (100.0 * miss_f / tot_f) if tot_f else 0.0
+        print(f"{g:12s} {items_total[g]:8d} {items_any_missing[g]:10d} {tot_f:10d} {miss_f:10d} {miss_pct:7.2f}%")
 
-    raise ValueError("Provide either per_group or total")
-
-def write_items(out_path, items):
-    out_path = Path(out_path)
-    if out_path.suffix == ".jsonl":
-        with out_path.open("w", encoding="utf-8") as f:
-            for it in items:
-                f.write(json.dumps(it, ensure_ascii=False) + "\n")
-    else:
-        with out_path.open("w", encoding="utf-8") as f:
-            json.dump(items, f, ensure_ascii=False)
+    print("\nExamples (up to 10 missing paths per group):")
+    for g in groups:
+        if files_missing[g] == 0:
+            continue
+        print(f"\n[{g}]")
+        for item_id, rel in missing_examples[g]:
+            print(f"  - id={item_id} path={rel}")
 
 if __name__ == "__main__":
-    # === 修改這裡 ===
-    ann = "spar_234k.json"   # 或 spar_7m.jsonl / 其他
-    out = "spar_sampled_4src_4k.json"  # .json or .jsonl
-    seed = 42
-
-    # 方式 A：每個來源各抽 N 筆（最常用）
-    per_group = {
-        "scannet": 1000,
-        "scannetpp": 1000,
-        "structured3d": 1000,
-        "rxr": 1000,
-    }
-
-    # 方式 B：總數 total，按各來源比例抽（用這行就把 per_group 註解掉）
-    # total = 4000
-
-    items = list(iter_items(ann))
-    sampled = stratified_sample(items, per_group=per_group, seed=seed)
-    write_items(out, sampled)
-
-    print(f"\nWrote sampled set: {out} (n={len(sampled)})")
+    check_missing_by_source(
+        annotation_path="spar_sampled_4src_4k.json",
+        data_root="/leonardo_scratch/large/userexternal/shuang00/spar_workspace/spar_data"
+    )
