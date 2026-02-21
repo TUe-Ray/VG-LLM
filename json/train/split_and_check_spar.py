@@ -79,6 +79,7 @@ def main():
     items_missing = Counter()
     files_total = Counter()
     files_missing = Counter()
+    missing_ids = defaultdict(list)
 
     for item in iter_items(ann_path):
         group = infer_group(item)
@@ -100,6 +101,7 @@ def main():
 
             if any_miss:
                 items_missing[group] += 1
+                missing_ids[group].append(item.get("id", "<no-id>"))
 
     # -------- SPLIT --------
     if args.mode in ["split", "both"]:
@@ -110,6 +112,8 @@ def main():
             print(f"  {g:12s}: {len(split_items.get(g, []))} items")
 
     # -------- CHECK --------
+
+    
     if args.mode in ["check", "both"]:
         print("\nMissing statistics:")
         print("-" * 72)
@@ -120,6 +124,16 @@ def main():
             miss_f = files_missing[g]
             miss_pct = (100.0 * miss_f / tot_f) if tot_f else 0.0
             print(f"{g:12s} {items_total[g]:8d} {items_missing[g]:10d} {tot_f:10d} {miss_f:10d} {miss_pct:7.2f}%")
+    # Save missing ids
+    if args.mode in ["check", "both"]:
+        print("\nSaving missing id lists...")
+        for g in GROUP_ORDER:
+            if missing_ids[g]:
+                out_file = f"missing_ids_{g}.txt"
+                with open(out_file, "w") as f:
+                    for _id in missing_ids[g]:
+                        f.write(str(_id) + "\n")
+                print(f"  {g:12s}: {len(missing_ids[g])} ids -> {out_file}")
 
 
 if __name__ == "__main__":
