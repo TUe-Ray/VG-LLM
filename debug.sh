@@ -171,8 +171,8 @@ echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
 # ======================
 MODEL_PATH="$FAST/hf_models/qwen2_5"  # [ModelArguments] Pretrained model path
-GEOMETRY_ENCODER_TYPE="vggt"
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt"
+GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
 
 OUTPUT_DIR="$FAST/hf_models/checkpoints"                   # Directory for saving checkpoints
 CACHE_DIR="$FAST/hf_models/cache"                        # [TrainingArguments] Cache directory for models

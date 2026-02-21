@@ -260,7 +260,6 @@ def train(attn_implementation="flash_attention_2"):
                 )
 
             # Update config with geometry encoder settings
-            # 用幾何編碼器設定更新配置
             for k in [
                 "use_geometry_encoder", 
                 "geometry_encoder_type", 
@@ -279,6 +278,7 @@ def train(attn_implementation="flash_attention_2"):
             
             # Load model with geometry encoder
             # 載入帶幾何編碼器的模型
+            #INCOMPLETE: have the correct geometry encoder
             model = Qwen2_5_VLForConditionalGenerationWithVGGT.from_pretrained(
                 pretrained_model_name_or_path=model_args.model_name_or_path,
                 config=config,
@@ -355,6 +355,7 @@ def train(attn_implementation="flash_attention_2"):
         padding_side="right",  # Right padding for causal LM training
         # 因果語言模型訓練的右填充
         use_fast=False,  # Use slow tokenizer for compatibility
+        #WHY?: tokenizer 可能有一些特殊的 token 或行為，慢速分詞器（Python 實現）通常更靈活且兼容性更好，尤其是在處理特殊任務或自定義模型時。
         # 使用慢速分詞器以確保相容性
     )
     
@@ -380,6 +381,7 @@ def train(attn_implementation="flash_attention_2"):
     
     # Create supervised training data module (handles data loading and preprocessing)
     # 建立監督式訓練資料模組（處理資料載入和預處理）
+    #INCOMPLETE: use the correct data module for geometry encoder if needed
     data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
     
     # Initialize Hugging Face trainer with model, tokenizer, and data

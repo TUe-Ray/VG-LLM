@@ -140,12 +140,14 @@ class LazySupervisedDataset(Dataset):
         dataset = data_args.dataset_use.split(",")
         dataset_list = data_list(dataset)
         print(f"Loading datasets: {dataset_list}")
+        #表示「N 個 vision tokens 對應的原始像素面積」。控制 vision token 數量
         self.video_max_total_pixels = getattr(
             data_args, "video_max_total_pixels", 1664 * 28 * 28
         )
         self.video_min_total_pixels = getattr(
             data_args, "video_min_total_pixels", 256 * 28 * 28
         )
+        #CAREFUL in train_qwen: data_args.model_type = "qwen2.5vl"
         self.model_type = data_args.model_type
         if data_args.model_type == "qwen2.5vl":
             self.get_rope_index = get_rope_index_25
