@@ -29,19 +29,19 @@ SPAR = {
 
 SPAR_234K = {
     "annotation_path": "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/train/spar_234k.json",
-    "data_path": "/leonardo_scratch/fast/EUHPC_D32_006/vgllm/data/media",
+    "data_path": "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/media",
     "tag": "3d"
 }
 
 LLAVA_HOUND = {
     "annotation_path": "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/train/llava_hound_255k.json",
-    "data_path": "/leonardo_scratch/fast/EUHPC_D32_006/vgllm/data/media",
+    "data_path": "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/media",
     "tag": "2d"
 }
 
 LLAVA_HOUND_64K = {
-    "annotation_path": "/leonardo_scratch/fast/EUHPC_D32_006/vgllm/data/train/llava_hound_64k.json",
-    "data_path": "/leonardo_scratch/fast/EUHPC_D32_006/vgllm/data/media",
+    "annotation_path": "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/train/llava_hound_64k.json",
+    "data_path": "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/media",
     "tag": "2d"
 }
 

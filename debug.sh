@@ -11,9 +11,8 @@
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400    
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159
 
-#lrdn0418,lrdn0119,lrdn0159
 
 
 #INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
@@ -252,9 +251,9 @@ srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
 #=======================
 srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
   echo "[$(hostname)] start mem monitor"
-  for i in $(seq 1 120); do
+  for i in $(seq 1 2); do
     echo "[$(hostname)] $(date +%H:%M:%S) $(free -h | awk "/Mem:/ {print \$3\"/\"\$2\" used, avail=\"\$7}")"
-    sleep 1
+    sleep 60
   done
 ' &
 
@@ -316,4 +315,4 @@ srun --export=ALL \
       --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
-  > "$OUTPUT_DIR/train.log" 2>&1
+  2>&1 | tee "$OUTPUT_DIR/train.log"
