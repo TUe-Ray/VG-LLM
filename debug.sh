@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=OOM
-#SBATCH --nodes=2
+#SBATCH --job-name=NCCL_Spar
+#SBATCH --nodes=4
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=0
 #SBATCH --time=00:20:00
 #SBATCH --partition=boost_usr_prod  
 #SBATCH --qos=boost_qos_dbg    # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
@@ -16,6 +16,9 @@
 
 #INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
 # 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
+
+DATASETS="spar_234k,llava_hound_64k"
+LR="1e-5"
 
 
 
@@ -180,32 +183,43 @@ mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 
 export WANDB_MODE=offline
-export NCCL_NVLS_ENABLE=0
+export NCCL_NVLS_ENABLE=1
 export WANDB_DIR="$WORK/wandb"    
 export WANDB_CACHE_DIR="$WORK/wandb_cache"
 export WANDB_CONFIG_DIR="$WORK/wandb_config"
 mkdir -p "$WANDB_DIR" "$WANDB_CACHE_DIR" "$WANDB_CONFIG_DIR"
 
-DATASETS="spar_234k,llava_hound_64k"
-DATASETS="llava_hound_64k"
 
-LR="1e-5"
 
 # 你可以用環境變數調整：
 # PER_DEVICE_BS：每張卡的 micro-batch（預設 1，跟你原本一致）
 # TOTAL_BATCH_SIZE：你想要的 global batch（預設：等於 WORLD_SIZE * PER_DEVICE_BS）
-PER_DEVICE_BS="${PER_DEVICE_BS:-1}"
-TOTAL_BATCH_SIZE="${TOTAL_BATCH_SIZE:-$((WORLD_SIZE * PER_DEVICE_BS))}"
+#TOTAL_BATCH_SIZE="${TOTAL_BATCH_SIZE:-$((WORLD_SIZE * PER_DEVICE_BS))}"
 
+# PER_DEVICE_BS="${PER_DEVICE_BS:-1}"
+# TOTAL_BATCH_SIZE="${TOTAL_BATCH_SIZE:-64}"  # INCOMPLETE: 先重現實驗
 
-# global_batch = WORLD_SIZE * PER_DEVICE_BS * GRAD_ACC
-# => GRAD_ACC = TOTAL_BATCH_SIZE / (WORLD_SIZE * PER_DEVICE_BS)
+# # global_batch = WORLD_SIZE * PER_DEVICE_BS * GRAD_ACC
+# # => GRAD_ACC = TOTAL_BATCH_SIZE / (WORLD_SIZE * PER_DEVICE_BS)
+# denom=$((WORLD_SIZE * PER_DEVICE_BS))
+# GRADIENT_ACCUMULATION_STEPS=$((TOTAL_BATCH_SIZE / denom))
+# if [ "$GRADIENT_ACCUMULATION_STEPS" -lt 1 ]; then
+#   echo "[WARN] TOTAL_BATCH_SIZE($TOTAL_BATCH_SIZE) < WORLD_SIZE*PER_DEVICE_BS($denom). Set GRAD_ACC=1"
+#   GRADIENT_ACCUMULATION_STEPS=1
+# fi
+
+PER_DEVICE_BS=1
+TOTAL_BATCH_SIZE=64
+
 denom=$((WORLD_SIZE * PER_DEVICE_BS))
-GRADIENT_ACCUMULATION_STEPS=$((TOTAL_BATCH_SIZE / denom))
-if [ "$GRADIENT_ACCUMULATION_STEPS" -lt 1 ]; then
-  echo "[WARN] TOTAL_BATCH_SIZE($TOTAL_BATCH_SIZE) < WORLD_SIZE*PER_DEVICE_BS($denom). Set GRAD_ACC=1"
-  GRADIENT_ACCUMULATION_STEPS=1
+
+if (( TOTAL_BATCH_SIZE % denom != 0 )); then
+  echo "[ERROR] TOTAL_BATCH_SIZE($TOTAL_BATCH_SIZE) not divisible by WORLD_SIZE*PER_DEVICE_BS($denom)"
+  echo "This would change the effective global batch size."
+  exit 1
 fi
+
+GRADIENT_ACCUMULATION_STEPS=$((TOTAL_BATCH_SIZE / denom))
 
 echo "[BATCH] PER_DEVICE_BS=$PER_DEVICE_BS"
 echo "[BATCH] TOTAL_BATCH_SIZE=$TOTAL_BATCH_SIZE"
@@ -300,4 +314,4 @@ srun --export=ALL \
       --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
-  2>&1 | tee "$OUTPUT_DIR/train.log"
+  > "$OUTPUT_DIR/train.log" 2>&1
