@@ -78,7 +78,10 @@ export NCCL_NVLS_ENABLE=0
 
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/model_checkpoint/Reproduce_Exp/checkpoints
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-8b
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/Reproduce_Exp/checkpoints
+
+# === Start Evaluation ===
 
 accelerate launch --num_processes=4 -m lmms_eval \
     --model vgllm \
