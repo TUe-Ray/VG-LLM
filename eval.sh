@@ -135,7 +135,7 @@ export GPUS_PER_NODE=$SLURM_GPUS_PER_NODE
 export NUM_MACHINES=$SLURM_JOB_NUM_NODES
 export TOTAL_PROCESSES=$((NUM_MACHINES * GPUS_PER_NODE))
 
-srun --ntasks=$NUM_MACHINES --ntasks-per-node=1 \
+srun --export=ALL \
     accelerate launch \
         --num_machines=$NUM_MACHINES \
         --num_processes=$TOTAL_PROCESSES \
@@ -149,3 +149,6 @@ srun --ntasks=$NUM_MACHINES --ntasks-per-node=1 \
             --tasks ${benchmark} \
             --batch_size 1 \
             --output_path $output_path
+
+# INCOMPLETE: register my own model class for --model
+# Note: Remember to add in in __init__.py
