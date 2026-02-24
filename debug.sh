@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=NCCL
+#SBATCH --job-name=WORKER
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -307,7 +307,7 @@ srun --export=ALL \
       --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
-      --dataloader_num_workers 0 \
+      --dataloader_num_workers 4 \
       --group_by_modality_length true \
       --seed 0 \
       --report_to "wandb" \
