@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=WORKER
-#SBATCH --nodes=2
+#SBATCH --job-name=Reproduce_Exp
+#SBATCH --nodes=4
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
-#SBATCH --cpus-per-task=8
-#SBATCH --time=00:20:00
+#SBATCH --cpus-per-task=32
+#SBATCH --time=23:59:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=boost_qos_dbg    # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=normal   # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
@@ -164,12 +164,15 @@ NNODES="${SLURM_JOB_NUM_NODES:-1}"
 NODE_RANK=${SLURM_NODEID}
 WORLD_SIZE=$((NNODES * NPROC_PER_NODE))
 
+export OMP_NUM_THREADS=2
+
 export MASTER_ADDR MASTER_PORT
 
 echo "[DDP] MASTER_ADDR=$MASTER_ADDR"
 echo "[DDP] MASTER_PORT=$MASTER_PORT"
 echo "[DDP] NNODES=$NNODES NODE_RANK=$NODE_RANK"
 echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
+echo "[DDP] OMP_NUM_THREADS=$OMP_NUM_THREADS"
 
 # ======================
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 git pull
-Job="debug.sh"
+Job="Run.sh"
 
 echo "======================================"
 echo " run $Job "
