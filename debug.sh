@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=NCCL_SPAR
+#SBATCH --job-name=NCCL
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -184,7 +184,7 @@ mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 
 export WANDB_MODE=offline
-export NCCL_NVLS_ENABLE=1
+export NCCL_NVLS_ENABLE=0
 export WANDB_DIR="$WORK/wandb"    
 export WANDB_CACHE_DIR="$WORK/wandb_cache"
 export WANDB_CONFIG_DIR="$WORK/wandb_config"
@@ -253,7 +253,7 @@ srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
   echo "[$(hostname)] start mem monitor"
   for i in $(seq 1 2); do
     echo "[$(hostname)] $(date +%H:%M:%S) $(free -h | awk "/Mem:/ {print \$3\"/\"\$2\" used, avail=\"\$7}")"
-    sleep 60
+    sleep 3
   done
 ' &
 
