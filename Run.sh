@@ -22,7 +22,7 @@ DATASETS="spar_234k,llava_hound_64k"
 LR="1e-5"
 
 
-
+JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
 echo "=== SLURM Job Specifications ==="
 echo "Job Name: $SLURM_JOB_NAME"
 echo "Job ID: $SLURM_JOB_ID"
@@ -33,11 +33,10 @@ echo "CPUs per Task: $SLURM_CPUS_PER_TASK"
 echo "Tasks per Node: $SLURM_NTASKS_PER_NODE"
 echo "Partition: $SLURM_JOB_PARTITION"
 echo "QOS: $SLURM_JOB_QOS"
-echo "Time Limit: $SLURM_TIME_LIMIT"
 echo "Memory per Node: $SLURM_MEM_PER_NODE"
 echo "Output: $SLURM_STDOUT"
 echo "Error: $SLURM_STDERR"
-echo "=============================="
+echo "Job Time Limit: $JOB_TIME_LIMIT"
 
 
 set -euo pipefail
@@ -306,8 +305,8 @@ srun --export=ALL \
       --lr_scheduler_type "cosine" \
       --weight_decay 0.01 \
       --logging_steps 50 \
-      --save_steps 1000 \
-      --save_total_limit 1 \
+      --save_steps 200 \
+      --save_total_limit 2 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
       --dataloader_num_workers 4 \
