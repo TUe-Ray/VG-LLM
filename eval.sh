@@ -14,6 +14,19 @@
 
 set -euo pipefail
 
+export HF_HOME=/leonardo_scratch/fast/EUHPC_D32_006/hf_cache
+export TRANSFORMERS_CACHE=$HF_HOME/transformers
+export HF_DATASETS_CACHE=$HF_HOME/datasets
+export HUGGINGFACE_HUB_CACHE=$HF_HOME/hub
+# 強制離線（compute node 不能連外就該這樣）
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+
+# 讓 datasets 不要一直想去網路 check
+export HF_UPDATE_DOWNLOAD_COUNTS=0
+
+
 module load cuda/12.6
 module load cudnn
 module load profile/deeplrn
