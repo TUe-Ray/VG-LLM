@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Evaluate_Reproduce_Exp
+#SBATCH --job-name=Eval_Selftrained
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -78,7 +78,7 @@ export NCCL_NVLS_ENABLE=0
 
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-8b
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/model_checkpoint/Reproduce_Exp/checkpoints
 
 accelerate launch --num_processes=4 -m lmms_eval \
     --model vgllm \
