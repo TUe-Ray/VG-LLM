@@ -118,6 +118,7 @@ MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 # MASTER_PORT=${MASTER_PORT:-29500}
 # INCOMPLETE: shuffle for official training
 MASTER_PORT=$(shuf -i 20000-29999 -n 1)
+MASTER_PORT=29500
 
 
 
