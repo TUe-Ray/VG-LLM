@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=Reproduce_Exp
 #SBATCH --nodes=4
-#SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
-#SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
+#SBATCH --gpus-per-node=4             
+#SBATCH --ntasks-per-node=1       
 #SBATCH --cpus-per-task=32
 #SBATCH --time=23:59:00
 #SBATCH --partition=boost_usr_prod  
@@ -10,11 +10,11 @@
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
-#SBATCH --exclusive
+
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159
 
 
-
+#SBATCH --exclusive
 #INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
 # 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
 
@@ -180,8 +180,8 @@ MODEL_PATH="$FAST/hf_models/qwen2_5"  # [ModelArguments] Pretrained model path
 GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
 GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
 
-OUTPUT_DIR="$FAST/hf_models/checkpoints"                   # Directory for saving checkpoints
-CACHE_DIR="$FAST/hf_models/cache"                        # [TrainingArguments] Cache directory for models
+OUTPUT_DIR="$FAST/hf_models/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$FAST/hf_models/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 
