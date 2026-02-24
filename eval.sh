@@ -14,6 +14,14 @@
 
 set -euo pipefail
 
+module load cuda/12.6
+module load cudnn
+module load profile/deeplrn
+
+export PATH="$WORK/miniconda3/bin:$PATH"
+eval "$(conda shell.bash hook)"
+conda activate vgllmN
+
 export LMMS_EVAL_LAUNCHER="accelerate"
 export NCCL_NVLS_ENABLE=0
 
