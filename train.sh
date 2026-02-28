@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=GRAD
-#SBATCH --nodes=4
+#SBATCH --job-name=2N_GRAD
+#SBATCH --nodes=2
 #SBATCH --gpus-per-node=4             
 #SBATCH --ntasks-per-node=1       
 #SBATCH --cpus-per-task=32
