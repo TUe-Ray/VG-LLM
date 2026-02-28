@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=4b_Repro_batch16
+#SBATCH --job-name=4bModel_Repro_batch16
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=00:30:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=boost_qos_dbg   # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=normal  # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
