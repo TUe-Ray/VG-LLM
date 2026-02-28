@@ -6,3 +6,4 @@ data
 count.py
 count_2.py
 json/train/spar_234k.json
+json/train/

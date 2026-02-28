@@ -32,6 +32,8 @@ class DataArguments:
     video_min_frame_pixels: int = field(default=4 * 28 * 28)
     max_samples: int = field(default=-1)
     shuffle: bool = field(default=True)
+    use_hdf5: bool = field(default=False)
+    hdf5_path: Optional[str] = field(default=None)
 
 
 @dataclass

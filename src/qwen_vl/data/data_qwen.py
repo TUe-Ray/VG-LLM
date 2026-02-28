@@ -13,6 +13,9 @@ from typing import Dict, Optional, Sequence, List, Tuple
 from io import BytesIO
 import base64
 from collections.abc import Sequence
+from io import BytesIO
+import h5py
+from torch.utils.data import get_worker_info
 
 import numpy as np
 import torch
@@ -137,8 +140,8 @@ class LazySupervisedDataset(Dataset):
     def __init__(self, tokenizer: transformers.PreTrainedTokenizer, data_args):
         super(LazySupervisedDataset, self).__init__()
 
-        dataset = data_args.dataset_use.split(",")
-        dataset_list = data_list(dataset)
+        dataset = data_args.dataset_use.split(",")  #["llava_hound", "SPAR_234"]
+        dataset_list = data_list(dataset) # 解析抽樣比例（例如 %30 → 0.3）/把 config + sampling_rate 組成 list
         print(f"Loading datasets: {dataset_list}")
         #表示「N 個 vision tokens 對應的原始像素面積」。控制 vision token 數量
         self.video_max_total_pixels = getattr(
@@ -173,7 +176,7 @@ class LazySupervisedDataset(Dataset):
             for ann in annotations:
                 ann["data_path"] = data["data_path"]
                 ann["tag"] = data["tag"]
-            list_data_dict += annotations
+            list_data_dict += annotations #=ist_data_dict.extend(annotations) ,把 annotations 裡的每一筆 sample加進 list_data_dict
 
         print(f"Total training samples: {len(list_data_dict)}")
 
@@ -187,6 +190,8 @@ class LazySupervisedDataset(Dataset):
         self.data_args.image_processor.min_pixels = data_args.min_pixels
         self.data_args.image_processor.size["longest_edge"] = data_args.max_pixels
         self.data_args.image_processor.size["shortest_edge"] = data_args.min_pixels
+        self.use_hdf5 = getattr(data_args, "use_hdf5", False)
+        self.hdf5_path = getattr(data_args, "hdf5_path", None)
 
     def __len__(self):
         return len(self.list_data_dict)
@@ -238,6 +243,46 @@ class LazySupervisedDataset(Dataset):
         else:
             print("No pre-calculated length available.")
             return np.array([1] * len(self.list_data_dict))
+
+            
+    # #==== new function for hdf5 support ====
+    # def _h5_worker_key(self):
+    #     # 每個 dataloader worker/進程各自持有一份檔案 handle，避免 fork 後共用造成問題
+    #     wi = get_worker_info()
+    #     return wi.id if wi is not None else 0
+    # def _lazy_open_h5(self):
+    #     if not getattr(self, "use_hdf5", False):
+    #         return None
+    #     if getattr(self, "hdf5_path", None) is None:
+    #         raise ValueError("use_hdf5=True but hdf5_path is None")
+
+    #     if not hasattr(self, "_h5_handles"):
+    #         self._h5_handles = {}
+
+    #     key = self._h5_worker_key()
+    #     if key not in self._h5_handles:
+    #         # 只讀模式即可；必要時可加 rdcc_nbytes 限制 cache
+    #         self._h5_handles[key] = h5py.File(self.hdf5_path, "r")
+    #     return self._h5_handles[key]
+    # def _get_h5_sample_group(self, idx: int):
+    #     h5 = self._lazy_open_h5()
+    #     # 假設你建 h5 時用 /samples/<idx>/...
+    #     return h5["samples"][str(idx)]
+    # def _open_image(self, x):
+    #     """
+    #     x:
+    #     - use_hdf5=False: x 是 path(str)
+    #     - use_hdf5=True : x 是 bytes/bytearray
+    #     """
+    #     if getattr(self, "use_hdf5", False):
+    #         if not isinstance(x, (bytes, bytearray, memoryview)):
+    #             raise TypeError(f"Expected bytes when use_hdf5=True, got {type(x)}")
+    #         img = Image.open(BytesIO(x))
+    #     else:
+    #         img = Image.open(x)
+    #     return img.convert("RGB")
+
+
 
     def process_image_unified(self, image_file):
         processor = copy.deepcopy(self.data_args.image_processor)
@@ -337,9 +382,13 @@ class LazySupervisedDataset(Dataset):
         except Exception as e:
             raise e
     
-    def read_video_images(self, source):
+    def read_video_images(self, idx:int, source):
         # read video images from the source
         assert isinstance(source["video"], str), "video should be a string"
+        # === New code for reading video frames from hdf5 when use_hdf5=True ===
+        #if getattr(self, "use_hdf5", False):
+
+        # === Original code for reading video frames from a video file path ===
         video_file = os.path.join(source["data_path"], source["video"])
         if not os.path.exists(video_file):
             print(f"File not exist: {video_file}")
@@ -376,7 +425,20 @@ class LazySupervisedDataset(Dataset):
         return images
 
     def _get_item(self, i) -> Dict[str, torch.Tensor]:
+        """
+        取出第 i 筆 annotation
+        self.list_data_dict 是你在 __init__ 時把所有 dataset 的 annotations 合併後的 list。
+        所以 sources 一開始是一個 dict，像：
+        {
+        "conversations": [...],
+        "image": [...]/"video": "...",
+        "data_path": "...",
+        "tag": "2d"
+        }
+        
+        """
         sources = self.list_data_dict[i]
+        #把單筆 dict 包成 list
         if isinstance(i, int):
             sources = [sources]
         assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME

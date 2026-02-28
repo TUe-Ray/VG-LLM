@@ -1,7 +1,7 @@
 #!/bin/bash
 
 git pull
-Job="train.sh"
+Job="train_4b.sh"
 
 echo "======================================"
 echo " run $Job "

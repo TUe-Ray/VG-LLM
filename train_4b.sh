@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=HDF5_test
+#SBATCH --job-name=4b_repro
 #SBATCH --nodes=4
 #SBATCH --gpus-per-node=4             
 #SBATCH --ntasks-per-node=1       
 #SBATCH --cpus-per-task=32
-#SBATCH --time=23:59:00
+#SBATCH --time=00:30:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=normal   # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=boost_qos_dbg   # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
@@ -318,5 +318,4 @@ srun --export=ALL \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
       --use_hdf5 True \
-      --hdf5_path "/leonardo_scratch/fast/EUHPC_D32_006/data/vgllm/hdf5/train.hdf5" \
   2>&1 | tee "$OUTPUT_DIR/train.log"

@@ -10,7 +10,7 @@
 #SBATCH --output=logs/eval/%x_%j.out
 #SBATCH --error=logs/eval/%x_%j.err
 #SBATCH --mem=0
-#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159, lrdn0080
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080
 
 JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
 echo "=== SLURM Job Specifications ==="
