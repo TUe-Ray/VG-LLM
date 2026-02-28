@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=4b_repro
-#SBATCH --nodes=4
-#SBATCH --gpus-per-node=4             
-#SBATCH --ntasks-per-node=1       
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=4
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
 #SBATCH --time=00:30:00
 #SBATCH --partition=boost_usr_prod  
@@ -19,7 +19,7 @@
 # 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
 
 DATASETS="spar_234k,llava_hound_64k"
-LR="1e-5"
+LR="5e-6"
 
 
 JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
