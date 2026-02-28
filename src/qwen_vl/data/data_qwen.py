@@ -382,7 +382,7 @@ class LazySupervisedDataset(Dataset):
         except Exception as e:
             raise e
     
-    def read_video_images(self, idx:int, source):
+    def read_video_images(self, source):
         # read video images from the source
         assert isinstance(source["video"], str), "video should be a string"
         # === New code for reading video frames from hdf5 when use_hdf5=True ===
