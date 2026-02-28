@@ -176,7 +176,7 @@ echo "[DDP] OMP_NUM_THREADS=$OMP_NUM_THREADS"
 # ======================
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
 # ======================
-MODEL_PATH="$FAST/hf_models/qwen2_5"  # [ModelArguments] Pretrained model path
+MODEL_PATH="$FAST/hf_models/qwen2_5_7b"  # [ModelArguments] Pretrained model path
 GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
 GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
 
