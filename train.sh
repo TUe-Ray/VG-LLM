@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --time=00:30:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=boose_qos_dbg   # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=boost_qos_dbg   # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
