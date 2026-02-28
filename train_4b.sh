@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4b_repro
+#SBATCH --job-name=4b_Repro_batch16
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
