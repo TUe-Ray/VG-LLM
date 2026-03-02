@@ -32,8 +32,8 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # === User-defined variables ===
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
-#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-8b
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4bModel_Repro_batch16/checkpoints
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-4b
+#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4bModel_Repro_batch16/checkpoints
 
 echo "=== Evaluation Configuration ==="
 echo "Benchmark: $benchmark"

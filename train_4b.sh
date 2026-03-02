@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=4bModel_batch64
-#SBATCH --nodes=2
+#SBATCH --job-name=4bModel_batch16_4Nodes
+#SBATCH --nodes=4
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
