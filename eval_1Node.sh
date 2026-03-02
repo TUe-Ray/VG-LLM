@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Eval_Selftrained
+#SBATCH --job-name=4bModel_self_eval
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -27,6 +27,20 @@ echo "Memory per Node: $SLURM_MEM_PER_NODE"
 echo "Output: $SLURM_STDOUT"
 echo "Error: $SLURM_STDERR"
 echo "Job Time Limit: $JOB_TIME_LIMIT"
+
+
+# === User-defined variables ===
+benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
+output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
+#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-8b
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4bModel_Repro_batch16/checkpoints
+
+echo "=== Evaluation Configuration ==="
+echo "Benchmark: $benchmark"
+echo "Output Path: $output_path"
+echo "Model Path: $model_path" 
+
+
 
 
 set -euo pipefail
@@ -76,10 +90,6 @@ conda activate vgllmN
 export LMMS_EVAL_LAUNCHER="accelerate"
 export NCCL_NVLS_ENABLE=0
 
-benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
-output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-8b
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/Reproduce_Exp/checkpoints
 
 # === Start Evaluation ===
 
