@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4bModel_pretrained_eval
+#SBATCH --job-name=4bModel_Selftrained_eval
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -32,8 +32,8 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # === User-defined variables ===
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-4b
-#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4bModel_Repro_batch16/checkpoints
+#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-4b
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4bModel_Repro_batch16/checkpoints
 
 echo "=== Evaluation Configuration ==="
 echo "Benchmark: $benchmark"
