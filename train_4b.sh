@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4bModel_batch16_4Nodes
+#SBATCH --job-name=4bModel_Truebatch16_4Nodes
 #SBATCH --nodes=4
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -51,7 +51,7 @@ CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                       
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 PER_DEVICE_BS=1
-TOTAL_BATCH_SIZE=64
+TOTAL_BATCH_SIZE=16
 
 
 echo "=== Job Configuration ==="
