@@ -11,7 +11,7 @@
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 
-#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808
 
 
 #SBATCH --exclusive
@@ -37,6 +37,31 @@ echo "Memory per Node: $SLURM_MEM_PER_NODE"
 echo "Output: $SLURM_STDOUT"
 echo "Error: $SLURM_STDERR"
 echo "Job Time Limit: $JOB_TIME_LIMIT"
+
+
+
+# ======================
+# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
+# ======================
+MODEL_PATH="$FAST/hf_models/qwen2_5_7b"  # [ModelArguments] Pretrained model path
+GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
+
+OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
+mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
+
+PER_DEVICE_BS=1
+TOTAL_BATCH_SIZE=64
+
+echo "=== Job Configuration ==="
+echo "MODEL_PATH: $MODEL_PATH"
+echo "GEOMETRY_ENCODER_TYPE: $GEOMETRY_ENCODER_TYPE"
+echo "GEOMETRY_ENCODER_PATH: $GEOMETRY_ENCODER_PATH"
+echo "PER_DEVICE_BS: $PER_DEVICE_BS"
+echo "TOTAL_BATCH_SIZE: $TOTAL_BATCH_SIZE"
+
+
 
 
 set -euo pipefail
@@ -173,18 +198,6 @@ echo "[DDP] NNODES=$NNODES NODE_RANK=$NODE_RANK"
 echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
 echo "[DDP] OMP_NUM_THREADS=$OMP_NUM_THREADS"
 
-# ======================
-# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
-# ======================
-MODEL_PATH="$FAST/hf_models/qwen2_5_7b"  # [ModelArguments] Pretrained model path
-GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
-
-OUTPUT_DIR="$FAST/hf_models/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
-CACHE_DIR="$FAST/hf_models/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
-mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
-
-
 export WANDB_MODE=offline
 export NCCL_NVLS_ENABLE=0
 export WANDB_DIR="$WORK/wandb"    
@@ -211,8 +224,7 @@ mkdir -p "$WANDB_DIR" "$WANDB_CACHE_DIR" "$WANDB_CONFIG_DIR"
 #   GRADIENT_ACCUMULATION_STEPS=1
 # fi
 
-PER_DEVICE_BS=1
-TOTAL_BATCH_SIZE=64
+
 
 denom=$((WORLD_SIZE * PER_DEVICE_BS))
 

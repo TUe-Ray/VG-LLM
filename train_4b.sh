@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4bModel_Repro_batch16
+#SBATCH --job-name=4bModel_batch64
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -11,7 +11,7 @@
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 
-#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808
 
 
 #SBATCH --exclusive
@@ -38,6 +38,28 @@ echo "Output: $SLURM_STDOUT"
 echo "Error: $SLURM_STDERR"
 echo "Job Time Limit: $JOB_TIME_LIMIT"
 
+
+# ======================
+# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
+# ======================
+MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  # [ModelArguments] Pretrained model path
+GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
+
+OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
+mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
+
+PER_DEVICE_BS=1
+TOTAL_BATCH_SIZE=64
+
+
+echo "=== Job Configuration ==="
+echo "MODEL_PATH: $MODEL_PATH"
+echo "GEOMETRY_ENCODER_TYPE: $GEOMETRY_ENCODER_TYPE"
+echo "GEOMETRY_ENCODER_PATH: $GEOMETRY_ENCODER_PATH"
+echo "PER_DEVICE_BS: $PER_DEVICE_BS"
+echo "TOTAL_BATCH_SIZE: $TOTAL_BATCH_SIZE"
 
 set -euo pipefail
 
@@ -173,16 +195,6 @@ echo "[DDP] NNODES=$NNODES NODE_RANK=$NODE_RANK"
 echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
 echo "[DDP] OMP_NUM_THREADS=$OMP_NUM_THREADS"
 
-# ======================
-# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
-# ======================
-MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  # [ModelArguments] Pretrained model path
-GEOMETRY_ENCODER_TYPE="vggt"          # INCOMPLETE: Later "pi3"
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" #INCOMPLETE: download pi3
-
-OUTPUT_DIR="$FAST/hf_models/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
-CACHE_DIR="$FAST/hf_models/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
-mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 
 export WANDB_MODE=offline
@@ -211,8 +223,7 @@ mkdir -p "$WANDB_DIR" "$WANDB_CACHE_DIR" "$WANDB_CONFIG_DIR"
 #   GRADIENT_ACCUMULATION_STEPS=1
 # fi
 
-PER_DEVICE_BS=1
-TOTAL_BATCH_SIZE=16
+
 
 denom=$((WORLD_SIZE * PER_DEVICE_BS))
 
@@ -304,7 +315,7 @@ srun --export=ALL \
       --warmup_ratio 0.03 \
       --lr_scheduler_type "cosine" \
       --weight_decay 0.01 \
-      --logging_steps 50 \
+      --logging_steps 10 \
       --save_steps 200 \
       --save_total_limit 2 \
       --deepspeed "scripts/zero2_opt.json" \
