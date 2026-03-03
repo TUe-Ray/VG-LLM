@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4b_pi3Withpi3Xweight
+#SBATCH --job-name=4b_pi3
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="use  pi3X weight and pi3x as encoder, NO metric head, using add(+) fusion, lr 5e-6, no hdf5"
+NOTE="use  pi3 as encoder, NO metric head, using add(+) fusion, lr 5e-6, no hdf5"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -44,7 +44,7 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # ======================
 MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
 GEOMETRY_ENCODER_TYPE="pi3"          
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/Pi3X" 
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/pi3" 
 
 OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
 CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
