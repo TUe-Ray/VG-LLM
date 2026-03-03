@@ -10,7 +10,7 @@ from dataclasses import dataclass
 @dataclass
 class GeometryEncoderConfig:
     """Configuration for geometry encoders."""
-    encoder_type: str = "vggt"  # "vggt", "pi3", etc.
+    encoder_type: str = "vggt"  # "vggt", "pi3", "Pi3X", etc.
     model_path: Optional[str] = None
     reference_frame: str = "first"  # "first" or "last"
     feature_dim: int = 2048  # Will be overridden by encoder's get_feature_dim()
