@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=4bModel_Truebatch16_4Nodes
-#SBATCH --nodes=4
+#SBATCH --job-name=4b_pi3
+#SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
@@ -10,13 +10,13 @@
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
-
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808
-
-
 #SBATCH --exclusive
-#INCOMPLETE: memory 獨占整個節點（不和別人搶 GPU），可以加 --exclusive；但如果你只用 1 GPU，通常不需要獨占整個節點
-# 若要 4 GPU：把 --gpus-per-node=4 (以及視需要調 time / exclusive)
+
+NOTE = "test 4b model with original pi3 encoder, using add fusion, lr 5e-6, no hdf5"
+
+echo "-------- Note --------"
+echo "  note: $NOTE"
 
 DATASETS="spar_234k,llava_hound_64k"
 LR="5e-6"
@@ -42,16 +42,16 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # ======================
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
 # ======================
-MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  # [ModelArguments] Pretrained model path
-GEOMETRY_ENCODER_TYPE="vggt"         
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" 
+MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
+GEOMETRY_ENCODER_TYPE="pi3"          
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/pi3" 
 
 OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
 CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 PER_DEVICE_BS=1
-TOTAL_BATCH_SIZE=16
+TOTAL_BATCH_SIZE=64
 
 
 echo "=== Job Configuration ==="
@@ -278,6 +278,60 @@ srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
 # ✅ 建議用 srun 包 torchrun：Slurm 會幫你把 rank/world size 管好
 # 這裡每個 node 啟 1 個 task（--ntasks-per-node=1），task 裡 torchrun 再起 NPROC_PER_NODE 個進程
 echo "========================================"
+echo " Training Configuration"
+echo "========================================"
+
+echo "--- ModelArguments ---"
+echo "  model_name_or_path:      $MODEL_PATH"
+echo "  tune_mm_llm:             True"
+echo "  tune_mm_mlp:             False"
+echo "  tune_mm_vision:          False"
+echo "  use_geometry_encoder:    true"
+echo "  geometry_encoder_type:   $GEOMETRY_ENCODER_TYPE"
+echo "  geometry_encoder_path:   $GEOMETRY_ENCODER_PATH"
+echo "  feature_fusion_method:   add"
+
+echo "--- DataArguments ---"
+echo "  dataset_use:             $DATASETS"
+echo "  data_flatten:            False"
+echo "  max_pixels:              $((576*28*28))"
+echo "  min_pixels:              $((16*28*28))"
+echo "  base_interval:           2"
+echo "  video_max_frames:        8"
+echo "  video_min_frames:        4"
+echo "  video_max_frame_pixels:  $((1664*28*28))"
+echo "  video_min_frame_pixels:  $((256*28*28))"
+echo "  use_hdf5:                false"
+
+echo "--- TrainingArguments ---"
+echo "  run_name:                ${SLURM_JOB_NAME}_${SLURM_JOB_ID}"
+echo "  output_dir:              $OUTPUT_DIR"
+echo "  cache_dir:               $CACHE_DIR"
+echo "  bf16:                    true"
+echo "  per_device_train_batch:  $PER_DEVICE_BS"
+echo "  gradient_accum_steps:    $GRADIENT_ACCUMULATION_STEPS"
+echo "  learning_rate:           $LR"
+echo "  mm_projector_lr:         1e-5"
+echo "  vision_tower_lr:         1e-6"
+echo "  optim:                   adamw_torch"
+echo "  model_max_length:        12800"
+echo "  num_train_epochs:        1"
+echo "  warmup_ratio:            0.03"
+echo "  lr_scheduler_type:       cosine"
+echo "  weight_decay:            0.01"
+echo "  logging_steps:           10"
+echo "  save_steps:              200"
+echo "  save_total_limit:        2"
+echo "  deepspeed:               scripts/zero2_opt.json"
+echo "  gradient_checkpointing:  true"
+echo "  dataloader_num_workers:  4"
+echo "  group_by_modality_len:   true"
+echo "  seed:                    0"
+echo "  report_to:               wandb"
+
+
+
+echo "========================================"
 echo " Starting training"
 srun --export=ALL \
   torchrun \
@@ -328,5 +382,6 @@ srun --export=ALL \
       --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
-      --use_hdf5 True \
+      --use_hdf5 "false" \
+      --note "$NOTE" \
   2>&1 | tee "$OUTPUT_DIR/train.log"

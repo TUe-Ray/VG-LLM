@@ -52,7 +52,7 @@ from qwen_vl.data.data_qwen import make_supervised_data_module
 from qwen_vl.train.argument import (
     ModelArguments,
     DataArguments,
-    TrainingArguments,
+    TrainingArguments
 )
 from transformers import AutoTokenizer, AutoProcessor, Qwen2VLImageProcessor, Trainer, AutoConfig, set_seed, enable_full_determinism
 
@@ -192,8 +192,12 @@ def train(attn_implementation="flash_attention_2"):
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments)
     )
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    model_args, data_args, training_args= parser.parse_args_into_dataclasses()
 
+
+    
+
+    
 
     # ---------------- W&B logging ----------------
     # Enable Weights & Biases logging via Hugging Face Trainer integration.
@@ -261,16 +265,21 @@ def train(attn_implementation="flash_attention_2"):
                 )
 
             # Update config with geometry encoder settings
-            for k in [
+            base_keys = [
                 "use_geometry_encoder", 
                 "geometry_encoder_type", 
-                "reference_frame", #INCOMPLETE:  Remove for pi3
                 "feature_fusion_method", 
                 "fusion_num_layers",
                 "geometry_merger_type" 
                 
-            ]:
+            ]
+            for k in base_keys:
                 setattr(config, k, getattr(model_args, k))
+
+            #reference frame is only used by VGGT
+            if model_args.geometry_encoder_type == "vggt":
+                setattr(config, "reference_frame", getattr(model_args, "reference_frame"))
+
 
             # Validate geometry encoder path is provided
             # 驗證已提供幾何編碼器路徑

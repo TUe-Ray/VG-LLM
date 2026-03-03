@@ -49,3 +49,7 @@ class TrainingArguments(transformers.TrainingArguments):
     mm_projector_lr: Optional[float] = None
     vision_tower_lr: Optional[float] = None
     group_by_modality_length: bool = field(default=False)
+
+@dataclass
+class Note:
+    content: str = field(default="This is default note content. Please provide a meaningful description of the training run.")
