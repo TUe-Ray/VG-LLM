@@ -4,16 +4,16 @@
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=00:20:00
+#SBATCH --time=14:00:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=boost_qos_dbg  # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=normal  # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="test 4b model with original pi3 encoder, using add fusion, lr 5e-6, no hdf5"
+NOTE="test 4b model with original pi3 encoder, using add(+) fusion, lr 5e-6, no hdf5"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -74,12 +74,12 @@ module load cuda/12.6
 module load cudnn
 module load profile/deeplrn
 
-echo "[DEBUG] after modules:"
-OUT=$(nvidia-smi -L 2>&1) || {
-  echo "[ERROR] nvidia-smi failed on $(hostname)"
-  echo "$OUT"
-  exit 1
-}
+# echo "[DEBUG] after modules:"
+# OUT=$(nvidia-smi -L 2>&1) || {
+#   echo "[ERROR] nvidia-smi failed on $(hostname)"
+#   echo "$OUT"
+#   exit 1
+# }
 if echo "$OUT" | grep -q "Driver/library version mismatch"; then
   echo "[ERROR] NVML mismatch on $(hostname)"
   echo "$OUT"
@@ -87,28 +87,28 @@ if echo "$OUT" | grep -q "Driver/library version mismatch"; then
 fi
 echo "$OUT"
 
-echo "[DEBUG] LD_LIBRARY_PATH after modules:"
-echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
+# echo "[DEBUG] LD_LIBRARY_PATH after modules:"
+# echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
 
-export PATH="$WORK/miniconda3/bin:$PATH"
-eval "$(conda shell.bash hook)"
-conda activate vgllmN
+# export PATH="$WORK/miniconda3/bin:$PATH"
+# eval "$(conda shell.bash hook)"
+# conda activate vgllmN
 
-echo "[DEBUG] after conda activate:"
-OUT=$(nvidia-smi -L 2>&1) || {
-  echo "[ERROR] nvidia-smi failed on $(hostname) after conda"
-  echo "$OUT"
-  exit 1
-}
-if echo "$OUT" | grep -q "Driver/library version mismatch"; then
-  echo "[ERROR] NVML mismatch on $(hostname) after conda"
-  echo "$OUT"
-  exit 1
-fi
-echo "$OUT"
+# echo "[DEBUG] after conda activate:"
+# OUT=$(nvidia-smi -L 2>&1) || {
+#   echo "[ERROR] nvidia-smi failed on $(hostname) after conda"
+#   echo "$OUT"
+#   exit 1
+# }
+# if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+#   echo "[ERROR] NVML mismatch on $(hostname) after conda"
+#   echo "$OUT"
+#   exit 1
+# fi
+# echo "$OUT"
 
-echo "[DEBUG] LD_LIBRARY_PATH after conda:"
-echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
+# echo "[DEBUG] LD_LIBRARY_PATH after conda:"
+# echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
 
 
 # echo "==== multi-node NVML sanity check ===="
@@ -248,27 +248,27 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 
 
-echo "========================================"
-echo " Pre-flight check"
+# echo "========================================"
+# echo " Pre-flight check"
 
-srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
-  echo "===== NODE $(hostname) ====="
-  free -h
-  grep -E "MemTotal|MemAvailable" /proc/meminfo
-  nvidia-smi -L
-  echo "cgroup memory.max: $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo NA)"
-'
+# srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
+#   echo "===== NODE $(hostname) ====="
+#   free -h
+#   grep -E "MemTotal|MemAvailable" /proc/meminfo
+#   nvidia-smi -L
+#   echo "cgroup memory.max: $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo NA)"
+# '
 
 
 
-#=======================
-srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
-  echo "[$(hostname)] start mem monitor"
-  for i in $(seq 1 2); do
-    echo "[$(hostname)] $(date +%H:%M:%S) $(free -h | awk "/Mem:/ {print \$3\"/\"\$2\" used, avail=\"\$7}")"
-    sleep 3
-  done
-' &
+# #=======================
+# srun --ntasks=$SLURM_JOB_NUM_NODES --ntasks-per-node=1 --export=ALL bash -lc '
+#   echo "[$(hostname)] start mem monitor"
+#   for i in $(seq 1 2); do
+#     echo "[$(hostname)] $(date +%H:%M:%S) $(free -h | awk "/Mem:/ {print \$3\"/\"\$2\" used, avail=\"\$7}")"
+#     sleep 3
+#   done
+# ' &
 
 
 
@@ -319,7 +319,7 @@ echo "  num_train_epochs:        1"
 echo "  warmup_ratio:            0.03"
 echo "  lr_scheduler_type:       cosine"
 echo "  weight_decay:            0.01"
-echo "  logging_steps:           10"
+echo "  logging_steps:           50"
 echo "  save_steps:              200"
 echo "  save_total_limit:        2"
 echo "  deepspeed:               scripts/zero2_opt.json"
@@ -369,7 +369,7 @@ srun --export=ALL \
       --warmup_ratio 0.03 \
       --lr_scheduler_type "cosine" \
       --weight_decay 0.01 \
-      --logging_steps 10 \
+      --logging_steps 50 \
       --save_steps 200 \
       --save_total_limit 2 \
       --deepspeed "scripts/zero2_opt.json" \
