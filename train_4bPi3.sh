@@ -90,9 +90,9 @@ echo "$OUT"
 # echo "[DEBUG] LD_LIBRARY_PATH after modules:"
 # echo "$LD_LIBRARY_PATH" | tr ":" "\n" | head -n 30
 
-# export PATH="$WORK/miniconda3/bin:$PATH"
-# eval "$(conda shell.bash hook)"
-# conda activate vgllmN
+export PATH="$WORK/miniconda3/bin:$PATH"
+eval "$(conda shell.bash hook)"
+conda activate vgllmN
 
 # echo "[DEBUG] after conda activate:"
 # OUT=$(nvidia-smi -L 2>&1) || {
