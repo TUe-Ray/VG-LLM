@@ -10,10 +10,10 @@
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
-#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE = "test 4b model with original pi3 encoder, using add fusion, lr 5e-6, no hdf5"
+NOTE="test 4b model with original pi3 encoder, using add fusion, lr 5e-6, no hdf5"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -383,5 +383,4 @@ srun --export=ALL \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
       --use_hdf5 "false" \
-      --note "$NOTE" \
   2>&1 | tee "$OUTPUT_DIR/train.log"
