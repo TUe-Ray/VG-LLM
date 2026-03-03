@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4b_pi3X
+#SBATCH --job-name=4b_pi3Withpi3Xweight
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="<DBG> 4b model with pi3X encoder, NO metric head, using add(+) fusion, lr 5e-6, no hdf5"
+NOTE="<DBG> use pi3 with pi3X weight as encoder, NO metric head, using add(+) fusion, lr 5e-6, no hdf5"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -74,12 +74,12 @@ module load cuda/12.6
 module load cudnn
 module load profile/deeplrn
 
-# echo "[DEBUG] after modules:"
-# OUT=$(nvidia-smi -L 2>&1) || {
-#   echo "[ERROR] nvidia-smi failed on $(hostname)"
-#   echo "$OUT"
-#   exit 1
-# }
+echo "[DEBUG] after modules:"
+OUT=$(nvidia-smi -L 2>&1) || {
+  echo "[ERROR] nvidia-smi failed on $(hostname)"
+  echo "$OUT"
+  exit 1
+}
 if echo "$OUT" | grep -q "Driver/library version mismatch"; then
   echo "[ERROR] NVML mismatch on $(hostname)"
   echo "$OUT"
