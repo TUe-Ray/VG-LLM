@@ -63,6 +63,10 @@ echo "TOTAL_BATCH_SIZE: $TOTAL_BATCH_SIZE"
 
 set -euo pipefail
 
+# Initialize variables
+OUT=""
+RET=0
+
 # ======================
 # Cluster-specific modules (依你的 launch_training.sh 的想法補完整)
 # ======================

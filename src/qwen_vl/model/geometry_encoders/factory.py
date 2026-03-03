@@ -4,7 +4,7 @@ from typing import Optional
 from .base import BaseGeometryEncoder, GeometryEncoderConfig
 from .vggt_encoder import VGGTEncoder
 from .pi3_encoder import Pi3Encoder
-from .Pi3X_encoder import Pi3XEncoder
+# from .Pi3X_encoder import Pi3XEncoder
 
 
 def create_geometry_encoder(config) -> BaseGeometryEncoder:
