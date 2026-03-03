@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn05" \68,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="use  pi3X weight and pi3x structure as encoder, NO metric head, using add(+) fusion, lr 5e-6, no hdf5"
+NOTE="use  pi3X weight and pi3x arch as encoder, NO metric head, using add(+) fusion, lr 5e-6, no hdf5"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
