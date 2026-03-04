@@ -12,6 +12,13 @@
 #SBATCH --mem=0
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,,lrdn0080
 
+
+NOTE="Eval for 4b model with pi3 encoder, pi3 weight"
+
+echo "-------- Note --------"
+echo "  note: $NOTE"
+
+
 JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
 echo "=== SLURM Job Specifications ==="
 echo "Job Name: $SLURM_JOB_NAME"
@@ -33,7 +40,7 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
 #model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-4b
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4bModel_Repro_batch16/checkpoints
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4b_pi3/checkpoints
 
 echo "=== Evaluation Configuration ==="
 echo "Benchmark: $benchmark"
