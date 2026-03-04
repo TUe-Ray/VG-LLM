@@ -1,7 +1,7 @@
 #!/bin/bash
 
 WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb/wandb}"   # 指到「含有 offline-run-* 的那層」
-SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
+SYNC_INTERVAL="${SYNC_INTERVAL:-500}"
 ACTIVE_MINUTES="${ACTIVE_MINUTES:-5}"
 
 export PATH="$WORK/miniconda3/bin:$PATH"
