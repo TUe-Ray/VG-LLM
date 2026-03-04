@@ -4,6 +4,10 @@ WANDB_ROOT="${WANDB_ROOT:-$WORK/wandb/wandb}"   # 指到「含有 offline-run-* 
 SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
 ACTIVE_MINUTES="${ACTIVE_MINUTES:-5}"
 
+export PATH="$WORK/miniconda3/bin:$PATH"
+eval "$(conda shell.bash hook)"
+conda activate vgllmN
+
 # Parse command line arguments
 SYNC_ALL=false
 if [ "$1" == "-all" ]; then
