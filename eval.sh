@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4bModel_Selftrained_eval
+#SBATCH --job-name=4b_pi3_eval
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
