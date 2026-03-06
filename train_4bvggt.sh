@@ -44,7 +44,7 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # ======================
 MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
 GEOMETRY_ENCODER_TYPE="vggt"          
-#GEOMETRY_ENCODER_PATH="$FAST/hf_models/" 
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/" 
 
 OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
 CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
