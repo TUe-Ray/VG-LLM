@@ -1,0 +1,307 @@
+#!/bin/bash
+#SBATCH --job-name=random_vggt_4b_train
+#SBATCH --nodes=2
+#SBATCH --gpus-per-node=4
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=32
+#SBATCH --time=00:30:00
+#SBATCH --partition=boost_usr_prod  
+#SBATCH --qos=boost_qos_dbg  # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --output=logs/train/%x_%j.out
+#SBATCH --error=logs/train/%x_%j.err
+#SBATCH --mem=0
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
+#SBATCH --exclusive
+
+NOTE="use randomlize vggt weight as encoder, using add(+) fusion, lr 5e-6, no hdf5"
+
+echo "-------- Note --------"
+echo "  note: $NOTE"
+
+DATASETS="spar_234k,llava_hound_64k"
+LR="5e-6"
+
+
+JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
+echo "=== SLURM Job Specifications ==="
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Number of Nodes: $SLURM_JOB_NUM_NODES"
+echo "Node List: $SLURM_JOB_NODELIST"
+echo "GPUs per Node: $SLURM_GPUS_PER_NODE"
+echo "CPUs per Task: $SLURM_CPUS_PER_TASK"
+echo "Tasks per Node: $SLURM_NTASKS_PER_NODE"
+echo "Partition: $SLURM_JOB_PARTITION"
+echo "QOS: $SLURM_JOB_QOS"
+echo "Memory per Node: $SLURM_MEM_PER_NODE"
+echo "Output: $SLURM_STDOUT"
+echo "Error: $SLURM_STDERR"
+echo "Job Time Limit: $JOB_TIME_LIMIT"
+
+
+# ======================
+# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
+# ======================
+MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
+GEOMETRY_ENCODER_TYPE="vggt"          
+#GEOMETRY_ENCODER_PATH="$FAST/hf_models/" 
+
+OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
+mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
+
+PER_DEVICE_BS=1
+TOTAL_BATCH_SIZE=64
+
+
+echo "=== Job Configuration ==="
+echo "MODEL_PATH: $MODEL_PATH"
+echo "GEOMETRY_ENCODER_TYPE: $GEOMETRY_ENCODER_TYPE"
+echo "GEOMETRY_ENCODER_PATH: $GEOMETRY_ENCODER_PATH"
+echo "PER_DEVICE_BS: $PER_DEVICE_BS"
+echo "TOTAL_BATCH_SIZE: $TOTAL_BATCH_SIZE"
+
+set -euo pipefail
+
+# ======================
+# Cluster-specific modules (依你的 launch_training.sh 的想法補完整)
+# ======================
+HOSTNAME=$(hostname)
+which nvidia-smi || true
+nvidia-smi -L || true
+
+module load cuda/12.6
+module load cudnn
+module load profile/deeplrn
+
+echo "[DEBUG] after modules:"
+OUT=$(nvidia-smi -L 2>&1) || {
+  echo "[ERROR] nvidia-smi failed on $(hostname)"
+  echo "$OUT"
+  exit 1
+}
+if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+  echo "[ERROR] NVML mismatch on $(hostname)"
+  echo "$OUT"
+  exit 1
+fi
+echo "$OUT"
+export PATH="$WORK/miniconda3/bin:$PATH"
+eval "$(conda shell.bash hook)"
+conda activate vgllmN
+echo "======================================"
+echo " Per-node NVML health check"
+echo "======================================"
+
+# 展開本次 allocation 的 node 清單
+NODE_LIST=$(scontrol show hostnames "$SLURM_JOB_NODELIST")
+
+for NODE in $NODE_LIST; do
+  echo "----- Checking $NODE -----"
+
+  OUT=$(srun -N1 -n1 -w "$NODE" bash -lc 'nvidia-smi -L' 2>&1)
+  RET=$?
+
+  if [ $RET -ne 0 ]; then
+    echo "[ERROR] nvidia-smi failed on $NODE"
+    echo "$OUT"
+    echo "Aborting job."
+    exit 1
+  fi
+
+  if echo "$OUT" | grep -q "Driver/library version mismatch"; then
+    echo "[ERROR] NVML mismatch detected on $NODE"
+    echo "$OUT"
+    echo "You may exclude it next time with:"
+    echo "#SBATCH --exclude=$NODE"
+    echo "Aborting job."
+    exit 1
+  fi
+
+  echo "$OUT"
+  echo "Node $NODE OK"
+done
+
+echo "All nodes passed NVML check."
+echo "======================================"
+
+
+
+# ======================
+# Distributed (Slurm-aware)
+# ======================
+MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+MASTER_PORT=$(shuf -i 20000-29999 -n 1)
+
+
+# NPROC_PER_NODE：用 Slurm 提供的 GPU 數，沒有就 fallback 到 nvidia-smi
+if [ -n "${SLURM_GPUS_ON_NODE:-}" ]; then
+  NPROC_PER_NODE="$SLURM_GPUS_ON_NODE"
+elif [ -n "${SLURM_GPUS_PER_NODE:-}" ]; then
+  NPROC_PER_NODE="$SLURM_GPUS_PER_NODE"
+else
+  NPROC_PER_NODE=$(nvidia-smi --list-gpus | wc -l)
+fi
+
+NNODES="${SLURM_JOB_NUM_NODES:-1}"
+NODE_RANK=${SLURM_NODEID}
+WORLD_SIZE=$((NNODES * NPROC_PER_NODE))
+
+export OMP_NUM_THREADS=2
+
+export MASTER_ADDR MASTER_PORT
+
+echo "[DDP] MASTER_ADDR=$MASTER_ADDR"
+echo "[DDP] MASTER_PORT=$MASTER_PORT"
+echo "[DDP] NNODES=$NNODES NODE_RANK=$NODE_RANK"
+echo "[DDP] NPROC_PER_NODE=$NPROC_PER_NODE WORLD_SIZE=$WORLD_SIZE"
+echo "[DDP] OMP_NUM_THREADS=$OMP_NUM_THREADS"
+
+
+
+export WANDB_MODE=offline
+export NCCL_NVLS_ENABLE=0
+export WANDB_DIR="$WORK/wandb"    
+export WANDB_CACHE_DIR="$WORK/wandb_cache"
+export WANDB_CONFIG_DIR="$WORK/wandb_config"
+mkdir -p "$WANDB_DIR" "$WANDB_CACHE_DIR" "$WANDB_CONFIG_DIR"
+
+
+
+
+
+
+denom=$((WORLD_SIZE * PER_DEVICE_BS))
+
+if (( TOTAL_BATCH_SIZE % denom != 0 )); then
+  echo "[ERROR] TOTAL_BATCH_SIZE($TOTAL_BATCH_SIZE) not divisible by WORLD_SIZE*PER_DEVICE_BS($denom)"
+  echo "This would change the effective global batch size."
+  exit 1
+fi
+
+GRADIENT_ACCUMULATION_STEPS=$((TOTAL_BATCH_SIZE / denom))
+
+echo "[BATCH] PER_DEVICE_BS=$PER_DEVICE_BS"
+echo "[BATCH] TOTAL_BATCH_SIZE=$TOTAL_BATCH_SIZE"
+echo "[BATCH] GRADIENT_ACCUMULATION_STEPS=$GRADIENT_ACCUMULATION_STEPS"
+
+# PyTorch CUDA memory management optimization
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+# INCOMPLETE: debug info
+# export TORCH_DISTRIBUTED_DEBUG=DETAIL
+# export NCCL_DEBUG=INFO
+
+
+# ======================
+# Launch training
+# ======================
+echo "========================================"
+echo " Training Configuration"
+echo "========================================"
+
+echo "--- ModelArguments ---"
+echo "  model_name_or_path:      $MODEL_PATH"
+echo "  tune_mm_llm:             True"
+echo "  tune_mm_mlp:             False"
+echo "  tune_mm_vision:          False"
+echo "  use_geometry_encoder:    true"
+echo "  geometry_encoder_type:   $GEOMETRY_ENCODER_TYPE"
+echo "  geometry_encoder_path:   $GEOMETRY_ENCODER_PATH"
+echo "  feature_fusion_method:   add"
+echo "  geometry_encoder_random_init: True"
+
+echo "--- DataArguments ---"
+echo "  dataset_use:             $DATASETS"
+echo "  data_flatten:            False"
+echo "  max_pixels:              $((576*28*28))"
+echo "  min_pixels:              $((16*28*28))"
+echo "  base_interval:           2"
+echo "  video_max_frames:        8"
+echo "  video_min_frames:        4"
+echo "  video_max_frame_pixels:  $((1664*28*28))"
+echo "  video_min_frame_pixels:  $((256*28*28))"
+echo "  use_hdf5:                false"
+
+echo "--- TrainingArguments ---"
+echo "  run_name:                ${SLURM_JOB_NAME}_${SLURM_JOB_ID}"
+echo "  output_dir:              $OUTPUT_DIR"
+echo "  cache_dir:               $CACHE_DIR"
+echo "  bf16:                    true"
+echo "  per_device_train_batch:  $PER_DEVICE_BS"
+echo "  gradient_accum_steps:    $GRADIENT_ACCUMULATION_STEPS"
+echo "  learning_rate:           $LR"
+echo "  mm_projector_lr:         1e-5"
+echo "  vision_tower_lr:         1e-6"
+echo "  optim:                   adamw_torch"
+echo "  model_max_length:        12800"
+echo "  num_train_epochs:        1"
+echo "  warmup_ratio:            0.03"
+echo "  lr_scheduler_type:       cosine"
+echo "  weight_decay:            0.01"
+echo "  logging_steps:           50"
+echo "  save_steps:              200"
+echo "  save_total_limit:        2"
+echo "  deepspeed:               scripts/zero2_opt.json"
+echo "  gradient_checkpointing:  true"
+echo "  dataloader_num_workers:  4"
+echo "  group_by_modality_len:   true"
+echo "  seed:                    0"
+echo "  report_to:               wandb"
+
+
+
+echo "========================================"
+echo " Starting training"
+srun --export=ALL \
+  torchrun \
+    --nnodes="$SLURM_JOB_NUM_NODES" \
+    --nproc_per_node=$NPROC_PER_NODE \
+    --rdzv_id="$SLURM_JOB_ID" \
+    --rdzv_backend=c10d \
+    --rdzv_endpoint="$MASTER_ADDR:$MASTER_PORT" \
+    src/qwen_vl/train/train_qwen.py \
+      --run_name "${SLURM_JOB_NAME}_${SLURM_JOB_ID}" \
+      --model_name_or_path "$MODEL_PATH" \
+      --tune_mm_llm True \
+      --tune_mm_vision False \
+      --tune_mm_mlp False \
+      --dataset_use "$DATASETS" \
+      --output_dir "$OUTPUT_DIR" \
+      --cache_dir "$CACHE_DIR" \
+      --bf16 \
+      --per_device_train_batch_size "$PER_DEVICE_BS" \
+      --gradient_accumulation_steps "$GRADIENT_ACCUMULATION_STEPS" \
+      --learning_rate "$LR" \
+      --mm_projector_lr 1e-5 \
+      --vision_tower_lr 1e-6 \
+      --optim adamw_torch \
+      --model_max_length 12800 \
+      --data_flatten False \
+      --max_pixels $((576*28*28)) \
+      --min_pixels $((16*28*28)) \
+      --base_interval 2 \
+      --video_max_frames 8 \
+      --video_min_frames 4 \
+      --video_max_frame_pixels $((1664*28*28)) \
+      --video_min_frame_pixels $((256*28*28)) \
+      --num_train_epochs 1 \
+      --warmup_ratio 0.03 \
+      --lr_scheduler_type "cosine" \
+      --weight_decay 0.01 \
+      --logging_steps 50 \
+      --save_steps 200 \
+      --save_total_limit 2 \
+      --deepspeed "scripts/zero2_opt.json" \
+      --gradient_checkpointing \
+      --dataloader_num_workers 4 \
+      --group_by_modality_length true \
+      --seed 0 \
+      --report_to "wandb" \
+      --use_geometry_encoder true \
+      --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
+      --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
+      --feature_fusion_method "add" \
+      --use_hdf5 "false" \
+      --geometry_encoder_random_init true \
+  2>&1 | tee "$OUTPUT_DIR/train.log"

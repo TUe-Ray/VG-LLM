@@ -18,6 +18,7 @@ class ModelArguments:
     feature_fusion_method: str = field(default="add")  # Method to fuse geometry and visual features ("add", "concat", "cross_attention", "gate")
     fusion_num_layers: int = field(default=1)  # Number of layers in the cross-attention module when feature_fusion_method is "cross_attention"
     geometry_merger_type: str = field(default="mlp")  # Type of geometry feature merger ("mlp", "avg")
+    geometry_encoder_random_init: bool = field(default=False)  # Whether to randomly initialize the geometry encoder instead of loading pre-trained weights
 
 @dataclass
 class DataArguments:
