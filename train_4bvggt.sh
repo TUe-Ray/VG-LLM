@@ -86,6 +86,8 @@ if echo "$OUT" | grep -q "Driver/library version mismatch"; then
   exit 1
 fi
 echo "$OUT"
+
+
 export PATH="$WORK/miniconda3/bin:$PATH"
 eval "$(conda shell.bash hook)"
 conda activate vgllmN

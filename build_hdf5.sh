@@ -12,6 +12,13 @@
 
 set -euo pipefail
 
+export PATH="$WORK/miniconda3/bin:$PATH"
+eval "$(conda shell.bash hook)"
+conda activate vgllmN
+echo "======================================"
+echo " Per-node NVML health check"
+echo "======================================"
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 # Annotation JSON files on HPC (comma-separated, no spaces)
 JSON_FILES="\
