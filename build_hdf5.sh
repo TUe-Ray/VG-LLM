@@ -1,23 +1,13 @@
 #!/bin/bash
-# ============================================================
-# build_hdf5.sh  –  Convert training media to sharded HDF5
-#
-# This is a SINGLE-NODE CPU job (no GPU needed).
-# Run BEFORE training to prepare the HDF5 cache.
-#
-# Submit:
-#   sbatch scripts/preprocess/build_hdf5.sh
-# ============================================================
 #SBATCH --job-name=build_hdf5
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=04:00:00
 #SBATCH --partition=lrd_all_serial
-#SBATCH --qos=normal
 #SBATCH --output=logs/preprocess/%x_%j.out
 #SBATCH --error=logs/preprocess/%x_%j.err
-#SBATCH --mem=30G
+#SBATCH --mem=30000M
 
 set -euo pipefail
 
