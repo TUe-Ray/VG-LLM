@@ -1,13 +1,14 @@
 #!/bin/bash
 #SBATCH --job-name=build_hdf5
+#SBATCH --partition=lrd_all_serial
+#SBATCH --account=euhpc_d32_006
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=04:00:00
-#SBATCH --partition=lrd_all_serial
-#SBATCH --output=logs/preprocess/%x_%j.out
-#SBATCH --error=logs/preprocess/%x_%j.err
 #SBATCH --mem=30000M
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
 
 set -euo pipefail
 
