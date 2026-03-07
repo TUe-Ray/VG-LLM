@@ -11,7 +11,7 @@
 #SBATCH --job-name=build_hdf5
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 #SBATCH --time=04:00:00
 #SBATCH --partition=lrd_all_serial
 #SBATCH --qos=normal
@@ -38,7 +38,7 @@ NUM_SHARDS=32       # Match or exceed your total dataloader workers during train
                     # Training uses 4 workers/GPU × 4 GPU/node × 2 nodes = 32 workers
                     # 32 shards → each shard is opened by ~1 worker on average
 
-NUM_WORKERS=8      # Parallel conversion workers (= NUM_SHARDS for max throughput,
+NUM_WORKERS=4      # Parallel conversion workers (= NUM_SHARDS for max throughput,
                     # capped at --cpus-per-task)
 
 JPEG_QUALITY=95     # 95 is virtually lossless; use 85 to halve storage at minor quality cost
