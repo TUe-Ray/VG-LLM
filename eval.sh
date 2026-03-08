@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=4b_pi3_eval
+#SBATCH --job-name=4b_ranVGGT_eval
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,,lrdn0080
 
 
-NOTE="Eval for 4b model with pi3 encoder, pi3 weight"
+NOTE="Eval for 4b model with random VGGT encoder, random VGGT weight"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -40,7 +40,7 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
 #model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-4b
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/4b_pi3/checkpoints
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/random_vggt_4b_train/checkpoints
 
 echo "=== Evaluation Configuration ==="
 echo "Benchmark: $benchmark"

@@ -321,7 +321,7 @@ echo "  lr_scheduler_type:       cosine"
 echo "  weight_decay:            0.01"
 echo "  logging_steps:           50"
 echo "  save_steps:              200"
-echo "  save_total_limit:        2"
+echo "  save_total_limit:        1"
 echo "  deepspeed:               scripts/zero2_opt.json"
 echo "  gradient_checkpointing:  true"
 echo "  dataloader_num_workers:  4"
@@ -371,7 +371,7 @@ srun --export=ALL \
       --weight_decay 0.01 \
       --logging_steps 50 \
       --save_steps 200 \
-      --save_total_limit 2 \
+      --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
       --dataloader_num_workers 4 \
