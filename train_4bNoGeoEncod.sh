@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=random_vggt_4b_train
+#SBATCH --job-name=noGeoEncoder
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="use randomlize vggt weight as encoder, using add(+) fusion, lr 5e-6, no hdf5"
+NOTE="don't use geometry encoder at all"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -43,8 +43,8 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
 # ======================
 MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
-GEOMETRY_ENCODER_TYPE="vggt"          
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/" 
+GEOMETRY_ENCODER_TYPE="None"          
+GEOMETRY_ENCODER_PATH="None" 
 
 OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
 CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
@@ -205,7 +205,7 @@ echo "  model_name_or_path:      $MODEL_PATH"
 echo "  tune_mm_llm:             True"
 echo "  tune_mm_mlp:             False"
 echo "  tune_mm_vision:          False"
-echo "  use_geometry_encoder:    true"
+echo "  use_geometry_encoder:    False"
 echo "  geometry_encoder_type:   $GEOMETRY_ENCODER_TYPE"
 echo "  geometry_encoder_path:   $GEOMETRY_ENCODER_PATH"
 echo "  feature_fusion_method:   add"
@@ -298,10 +298,10 @@ srun --export=ALL \
       --group_by_modality_length true \
       --seed 0 \
       --report_to "wandb" \
-      --use_geometry_encoder true \
+      --use_geometry_encoder false \
       --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
       --use_hdf5 "false" \
-      --geometry_encoder_random_init false \
+      --geometry_encoder_random_init true \
   2>&1 | tee "$OUTPUT_DIR/train.log"
