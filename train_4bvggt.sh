@@ -50,6 +50,11 @@ OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                
 CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
+# HDF5 configuration
+USE_HDF5="true"
+HDF5_PATH="$FAST/data/vgllm/hdf5"
+HDF5_NUM_SHARDS=32
+
 PER_DEVICE_BS=1
 TOTAL_BATCH_SIZE=64
 
