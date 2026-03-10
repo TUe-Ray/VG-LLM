@@ -262,6 +262,10 @@ echo "  report_to:               wandb"
 
 echo "========================================"
 echo " Starting training"
+export PROFILE_DATA_LOADING=1
+export PROFILE_EVERY_N=2
+export PROFILE_ONLY_RANK0=1
+
 srun --export=ALL \
   torchrun \
     --nnodes="$SLURM_JOB_NUM_NODES" \

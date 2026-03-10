@@ -24,6 +24,61 @@ from collections import defaultdict
 # Handles are opened lazily and kept open for the lifetime of the worker.
 _worker_h5_handles: dict = {}
 
+_profile_state = defaultdict(
+    lambda: {
+        "count": 0,
+        "total": 0.0,
+        "list_frames": 0.0,
+        "open_images": 0.0,
+        "draw_marks": 0.0,
+        "prepare_inputs": 0.0,
+        "text_and_rope": 0.0,
+    }
+)
+
+def _profile_enabled():
+    return os.environ.get("PROFILE_DATA_LOADING", "0") == "1"
+
+def _profile_every():
+    return int(os.environ.get("PROFILE_EVERY_N", "100"))
+
+def _profile_key():
+    wi = get_worker_info()
+    worker_id = wi.id if wi is not None else -1
+    rank = os.environ.get("RANK", "0")
+    return rank, worker_id
+
+def _profile_should_print():
+    if not _profile_enabled():
+        return False
+    if os.environ.get("PROFILE_ONLY_RANK0", "1") == "1" and os.environ.get("RANK", "0") != "0":
+        return False
+    wi = get_worker_info()
+    return wi is None or wi.id == 0
+
+def _profile_update(stats: dict):
+    if not _profile_enabled():
+        return
+
+    key = _profile_key()
+    state = _profile_state[key]
+    state["count"] += 1
+
+    for k, v in stats.items():
+        state[k] += float(v)
+
+    if _profile_should_print() and state["count"] % _profile_every() == 0:
+        n = state["count"]
+        print(
+            "[DATA PROF] "
+            f"rank={key[0]} worker={key[1]} n={n} "
+            f"total={state['total']/n:.4f}s "
+            f"list_frames={state['list_frames']/n:.4f}s "
+            f"open_images={state['open_images']/n:.4f}s "
+            f"draw_marks={state['draw_marks']/n:.4f}s "
+            f"prepare_inputs={state['prepare_inputs']/n:.4f}s "
+            f"text_and_rope={state['text_and_rope']/n:.4f}s"
+        )
 
 def _get_h5_handle(shard_path: str) -> h5py.File:
     """Return a cached read-only HDF5 file handle for the given shard."""
@@ -422,9 +477,12 @@ class LazySupervisedDataset(Dataset):
         except Exception as e:
             raise e
     
-    def read_video_images(self, source):
+    def read_video_images(self, source, prof=None):
         # read video images from the source
         assert isinstance(source["video"], str), "video should be a string"
+
+        if prof is None:
+            prof = {}
 
         def get_frame_indices(total_frames, fps=1):
             video_length = total_frames / fps
@@ -442,7 +500,10 @@ class LazySupervisedDataset(Dataset):
         # ── HDF5 path ────────────────────────────────────────────────────────
         if self.use_hdf5:
             video_dir = source["video"].replace("\\", "/")
+
+            t0 = time.perf_counter()
             frame_rel_paths, shard_idx = self._hdf5_list_video_frames(video_dir)
+            prof["list_frames"] = prof.get("list_frames", 0.0) + (time.perf_counter() - t0)
 
             if not frame_rel_paths:
                 print(f"No frames found in HDF5 for video dir: {video_dir}")
@@ -451,10 +512,12 @@ class LazySupervisedDataset(Dataset):
             frame_idx = get_frame_indices(len(frame_rel_paths), fps=1)
             selected = [frame_rel_paths[i] for i in frame_idx]
 
+            t1 = time.perf_counter()
             if shard_idx is not None:
                 images = [self._hdf5_open_image_from_shard(shard_idx, p) for p in selected]
             else:
                 images = [self._hdf5_open_image(p) for p in selected]
+            prof["open_images"] = prof.get("open_images", 0.0) + (time.perf_counter() - t1)
 
             return images
 
@@ -508,10 +571,18 @@ class LazySupervisedDataset(Dataset):
         sample = copy.deepcopy(self.list_data_dict[i])
         sources = [sample]
         video = None
-        
+        prof = {
+            "total": 0.0,
+            "list_frames": 0.0,
+            "open_images": 0.0,
+            "draw_marks": 0.0,
+            "prepare_inputs": 0.0,
+            "text_and_rope": 0.0,
+        }
+        t_item0 = time.perf_counter()
         # Convert video-dir sample into image sequence lazily, but do NOT mutate original dataset
         if "video" in sample:
-            sample["images"] = self.read_video_images(sample)
+            sample["images"] = self.read_video_images(sample, prof=prof)
             num_image = len(sample["images"])
             sample["conversations"][0]["value"] = sample["conversations"][0]["value"].replace(
                 DEFAULT_VIDEO_TOKEN, "".join([DEFAULT_IMAGE_TOKEN] * num_image)
@@ -550,14 +621,18 @@ class LazySupervisedDataset(Dataset):
             else:
                 raise NotImplementedError
 
+            t_marks = time.perf_counter()
             self.draw_visual_marks(image_file, sample.get("spar_info", None))
+            prof["draw_marks"] += time.perf_counter() - t_marks
 
             image, grid_thw, geometry_encoder_inputs = [], [], []
+            t_prepare = time.perf_counter()
             for file in image_file:
                 ret = prepare_image_inputs(file, self.data_args.image_processor)
                 image.append(ret["pixel_values"])
                 geometry_encoder_inputs.append(ret["geometry_encoder_inputs"])
                 grid_thw.append(ret["image_grid_thw"])
+            prof["prepare_inputs"] += time.perf_counter() - t_prepare
 
             grid_thw_merged = [
                 merged_thw.prod() // self.data_args.image_processor.merge_size**2
@@ -602,7 +677,7 @@ class LazySupervisedDataset(Dataset):
                 merged_thw.prod() // self.data_args.image_processor.merge_size**2
                 for merged_thw in grid_thw_merged
             ]
-
+            t_text = time.perf_counter()
             conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
                 conv_sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="video"
@@ -613,7 +688,7 @@ class LazySupervisedDataset(Dataset):
                 video_grid_thw=torch.stack(grid_thw, dim=0),
                 second_per_grid_ts=second_per_grid_ts,
             )
-
+            prof["text_and_rope"] += time.perf_counter() - t_text
         else:
             conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
@@ -643,6 +718,9 @@ class LazySupervisedDataset(Dataset):
             data_dict["video_grid_thw"] = grid_thw
 
         data_dict["tag"] = sample.get("tag", "2d")
+
+        prof["total"] += time.perf_counter() - t_item0
+        _profile_update(prof)
         return data_dict
 
 
