@@ -16,6 +16,8 @@ import base64
 from collections.abc import Sequence
 import h5py
 from torch.utils.data import get_worker_info
+import gzip
+from collections import defaultdict
 
 # ── Per-worker HDF5 handle cache ──────────────────────────────────────────────
 # Lives at module level so it is local to each forked DataLoader worker process.
@@ -210,14 +212,21 @@ class LazySupervisedDataset(Dataset):
         self.data_args.image_processor.size["longest_edge"] = data_args.max_pixels
         self.data_args.image_processor.size["shortest_edge"] = data_args.min_pixels
         self.use_hdf5 = getattr(data_args, "use_hdf5", False)
-        self.hdf5_path = getattr(data_args, "hdf5_path", None)  # directory of shards
+        self.hdf5_path = getattr(data_args, "hdf5_path", None)
         self.hdf5_num_shards = getattr(data_args, "hdf5_num_shards", 32)
+        self.video_frames_index = None
+
         if self.use_hdf5:
             if self.hdf5_path is None or not os.path.isdir(self.hdf5_path):
                 raise ValueError(
                     f"use_hdf5=True but hdf5_path='{self.hdf5_path}' is not a directory. "
                     "Pass the directory that contains the shard_XXXX.h5 files."
                 )
+
+            index_path = os.path.join(self.hdf5_path, "video_frames_index.json.gz")
+            if os.path.isfile(index_path):
+                with gzip.open(index_path, "rt", encoding="utf-8") as fh:
+                    self.video_frames_index = json.load(fh)
 
     def __len__(self):
         return len(self.list_data_dict)
@@ -270,43 +279,6 @@ class LazySupervisedDataset(Dataset):
             print("No pre-calculated length available.")
             return np.array([1] * len(self.list_data_dict))
 
-            
-    # #==== new function for hdf5 support ====
-    # def _h5_worker_key(self):
-    #     # 每個 dataloader worker/進程各自持有一份檔案 handle，避免 fork 後共用造成問題
-    #     wi = get_worker_info()
-    #     return wi.id if wi is not None else 0
-    # def _lazy_open_h5(self):
-    #     if not getattr(self, "use_hdf5", False):
-    #         return None
-    #     if getattr(self, "hdf5_path", None) is None:
-    #         raise ValueError("use_hdf5=True but hdf5_path is None")
-
-    #     if not hasattr(self, "_h5_handles"):
-    #         self._h5_handles = {}
-
-    #     key = self._h5_worker_key()
-    #     if key not in self._h5_handles:
-    #         # 只讀模式即可；必要時可加 rdcc_nbytes 限制 cache
-    #         self._h5_handles[key] = h5py.File(self.hdf5_path, "r")
-    #     return self._h5_handles[key]
-    # def _get_h5_sample_group(self, idx: int):
-    #     h5 = self._lazy_open_h5()
-    #     # 假設你建 h5 時用 /samples/<idx>/...
-    #     return h5["samples"][str(idx)]
-    # def _open_image(self, x):
-    #     """
-    #     x:
-    #     - use_hdf5=False: x 是 path(str)
-    #     - use_hdf5=True : x 是 bytes/bytearray
-    #     """
-    #     if getattr(self, "use_hdf5", False):
-    #         if not isinstance(x, (bytes, bytearray, memoryview)):
-    #             raise TypeError(f"Expected bytes when use_hdf5=True, got {type(x)}")
-    #         img = Image.open(BytesIO(x))
-    #     else:
-    #         img = Image.open(x)
-    #     return img.convert("RGB")
 
     # ── HDF5 helpers ─────────────────────────────────────────────────────────
 
@@ -317,17 +289,27 @@ class LazySupervisedDataset(Dataset):
         jpeg_bytes = h5[rel_path][()].tobytes()
         return Image.open(BytesIO(jpeg_bytes)).convert("RGB")
 
-    def _hdf5_list_video_frames(self, video_dir: str) -> List[str]:
+    def _hdf5_open_image_from_shard(self, shard_idx: int, rel_path: str) -> Image.Image:
+        shard_path = os.path.join(self.hdf5_path, f"shard_{shard_idx:04d}.h5")
+        h5 = _get_h5_handle(shard_path)
+        jpeg_bytes = h5[rel_path][()].tobytes()
+        return Image.open(BytesIO(jpeg_bytes)).convert("RGB")
+
+    def _hdf5_list_video_frames(self, video_dir: str):
         """
-        Return sorted relative frame paths for a video directory stored in HDF5.
-        The group key is the video dir path; leaves are individual frame filenames.
-        Equivalent to: sorted(os.path.join(video_dir, f) for f in os.listdir(full_dir))
+        Return:
+        frame_rel_paths: sorted full relative frame paths
+        shard_idx: int | None
         """
-        # All frame files land in the same shard as the directory key itself.
-        # We need to scan across shards because frames are sharded by file path,
-        # not by directory.  Use the metadata group stored by the converter.
-        # Simpler: collect across all shards (handles are cached, so no extra I/O cost
-        # once a worker has seen a shard before).
+        video_dir = video_dir.replace("\\", "/")
+
+        # Fast path: use sidecar index
+        if self.video_frames_index is not None and video_dir in self.video_frames_index:
+            item = self.video_frames_index[video_dir]
+            frame_rel_paths = [f"{video_dir}/{fname}" for fname in item["frames"]]
+            return frame_rel_paths, item["shard_idx"]
+
+        # Fallback path for old HDF5 layout: scan all shards
         frame_rel_paths = []
         for shard_idx in range(self.hdf5_num_shards):
             shard_path = os.path.join(self.hdf5_path, f"shard_{shard_idx:04d}.h5")
@@ -338,7 +320,7 @@ class LazySupervisedDataset(Dataset):
                     frame_rel_paths.append(f"{video_dir}/{fname}")
             except KeyError:
                 pass
-        return sorted(frame_rel_paths)
+        return sorted(frame_rel_paths), None
 
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -459,16 +441,21 @@ class LazySupervisedDataset(Dataset):
 
         # ── HDF5 path ────────────────────────────────────────────────────────
         if self.use_hdf5:
-            # source["video"] is a relative path to a frame directory, e.g.
-            # "llava_hound/frames/rT3BozSwtkA"
             video_dir = source["video"].replace("\\", "/")
-            frame_rel_paths = self._hdf5_list_video_frames(video_dir)
+            frame_rel_paths, shard_idx = self._hdf5_list_video_frames(video_dir)
+
             if not frame_rel_paths:
                 print(f"No frames found in HDF5 for video dir: {video_dir}")
                 raise FileNotFoundError
+
             frame_idx = get_frame_indices(len(frame_rel_paths), fps=1)
             selected = [frame_rel_paths[i] for i in frame_idx]
-            images = [self._hdf5_open_image(p) for p in selected]
+
+            if shard_idx is not None:
+                images = [self._hdf5_open_image_from_shard(shard_idx, p) for p in selected]
+            else:
+                images = [self._hdf5_open_image(p) for p in selected]
+
             return images
 
         # ── Original filesystem path ──────────────────────────────────────────
@@ -504,42 +491,49 @@ class LazySupervisedDataset(Dataset):
         "data_path": "...",
         "tag": "2d"
         }
+
+        
+        下面這版有兩個目的：
+        不再修改 self.list_data_dict
+        保持你現在的行為邏輯不變
         
         """
-        sources = self.list_data_dict[i]
-        #把單筆 dict 包成 list
-        if isinstance(i, int):
-            sources = [sources]
-        assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
+        # sources = self.list_data_dict[i]
+        # #把單筆 dict 包成 list
+        # if isinstance(i, int):
+        #     sources = [sources]
+        # assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
+        # video = None
+
+        sample = copy.deepcopy(self.list_data_dict[i])
+        sources = [sample]
         video = None
         
-        if "video" in sources[0]:
-            sources[0]["images"] = self.read_video_images(sources[0])
-            num_image = len(sources[0]["images"])
-            sources[0]["conversations"][0]["value"] = sources[0]["conversations"][0]["value"].replace(
+        # Convert video-dir sample into image sequence lazily, but do NOT mutate original dataset
+        if "video" in sample:
+            sample["images"] = self.read_video_images(sample)
+            num_image = len(sample["images"])
+            sample["conversations"][0]["value"] = sample["conversations"][0]["value"].replace(
                 DEFAULT_VIDEO_TOKEN, "".join([DEFAULT_IMAGE_TOKEN] * num_image)
             )
-            del sources[0]["video"]
-        
-        # # replace <image>\n with <image>
-        sources[0]["conversations"][0]["value"] = sources[0]["conversations"][0]["value"].replace(
+            sample.pop("video", None)
+
+        # Replace "<image>\n" with "<image>"
+        sample["conversations"][0]["value"] = sample["conversations"][0]["value"].replace(
             f"{DEFAULT_IMAGE_TOKEN}\n", DEFAULT_IMAGE_TOKEN
         )
 
-        # rename images tag
-        if "images" in sources[0]:
-            sources[0]["image"] = sources[0]["images"]
+        # Rename images -> image for downstream logic
+        if "images" in sample:
+            sample["image"] = sample["images"]
 
-        # notice that we use images as the tag
-        if "image" in sources[0]:
-            image_folder = self.list_data_dict[i]["data_path"]
-            image_file = self.list_data_dict[i]["image"]
+        if "image" in sample:
+            image_folder = sample["data_path"]
+            image_file = sample["image"]
+
             if isinstance(image_file, List):
-
                 if isinstance(image_file[0], str):
                     if self.use_hdf5:
-                        # rel_path is already relative to media root — look it up
-                        # directly in the appropriate HDF5 shard.
                         image_file = [
                             self._hdf5_open_image(file.replace("\\", "/"))
                             for file in image_file
@@ -553,62 +547,65 @@ class LazySupervisedDataset(Dataset):
                     pass
                 else:
                     raise NotImplementedError
-                # draw visual markers
-                self.draw_visual_marks(image_file, sources[0].get("spar_info", None))
-
-                image, grid_thw, geometry_encoder_inputs = [], [], []
-                for file in image_file:
-                    ret = prepare_image_inputs(file, self.data_args.image_processor)
-                    image.append(ret["pixel_values"])
-                    geometry_encoder_inputs.append(ret["geometry_encoder_inputs"])
-                    grid_thw.append(ret["image_grid_thw"])
             else:
                 raise NotImplementedError
 
-            grid_thw_merged = copy.deepcopy(grid_thw)
+            self.draw_visual_marks(image_file, sample.get("spar_info", None))
+
+            image, grid_thw, geometry_encoder_inputs = [], [], []
+            for file in image_file:
+                ret = prepare_image_inputs(file, self.data_args.image_processor)
+                image.append(ret["pixel_values"])
+                geometry_encoder_inputs.append(ret["geometry_encoder_inputs"])
+                grid_thw.append(ret["image_grid_thw"])
+
             grid_thw_merged = [
                 merged_thw.prod() // self.data_args.image_processor.merge_size**2
-                for merged_thw in grid_thw_merged
+                for merged_thw in copy.deepcopy(grid_thw)
             ]
-            sources = copy.deepcopy([e["conversations"] for e in sources])
+
+            conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
-                sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="image"
+                conv_sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="image"
             )
             position_ids, _ = self.get_rope_index(
                 self.data_args.image_processor.merge_size,
                 data_dict["input_ids"],
                 torch.stack(grid_thw, dim=0),
             )
-        elif "video" in sources[0]:
-            video_file = self.list_data_dict[i]["video"]
-            video_folder = self.list_data_dict[i]["data_path"]
+
+        elif "video" in sample:
+            # This branch is kept for true video-file inputs (.mp4/.avi/.mov)
+            video_file = sample["video"]
+            video_folder = sample["data_path"]
+
             if isinstance(video_file, List):
                 if len(video_file) > 1:
-                    video_file = [
-                        os.path.join(video_folder, file) for file in video_file
-                    ]
+                    video_file = [os.path.join(video_folder, file) for file in video_file]
                     results = [self.process_video(file) for file in video_file]
                     video, grid_thw, second_per_grid_ts = zip(*results)
                 else:
-                    video_file = video_file[0]
-                    video_file = os.path.join(video_folder, video_file)
+                    video_file = os.path.join(video_folder, video_file[0])
                     video, grid_thw, second_per_grid_ts = self.process_video(video_file)
                     video = [video]
             else:
                 video_file = os.path.join(video_folder, video_file)
                 video, grid_thw, second_per_grid_ts = self.process_video(video_file)
                 video = [video]
+
             grid_thw_merged = copy.deepcopy(grid_thw)
             if not isinstance(grid_thw, Sequence):
                 grid_thw_merged = [grid_thw_merged]
                 grid_thw = [grid_thw]
+
             grid_thw_merged = [
                 merged_thw.prod() // self.data_args.image_processor.merge_size**2
                 for merged_thw in grid_thw_merged
             ]
-            sources = copy.deepcopy([e["conversations"] for e in sources])
+
+            conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
-                sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="video"
+                conv_sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="video"
             )
             position_ids, _ = self.get_rope_index(
                 self.data_args.image_processor.merge_size,
@@ -616,11 +613,11 @@ class LazySupervisedDataset(Dataset):
                 video_grid_thw=torch.stack(grid_thw, dim=0),
                 second_per_grid_ts=second_per_grid_ts,
             )
+
         else:
-            grid_thw_merged = None
-            sources = copy.deepcopy([e["conversations"] for e in sources])
+            conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
-                sources, self.tokenizer, grid_thw=grid_thw_merged
+                conv_sources, self.tokenizer, grid_thw=None
             )
             position_ids = (
                 torch.arange(0, data_dict["input_ids"].size(1))
@@ -636,17 +633,16 @@ class LazySupervisedDataset(Dataset):
                 position_ids=position_ids,
             )
 
-        if "image" in self.list_data_dict[i]:
+        if "image" in sample:
             data_dict["pixel_values"] = image
             data_dict["image_grid_thw"] = grid_thw
             if getattr(self.data_args, "use_geometry_encoder", False):
                 data_dict["geometry_encoder_inputs"] = geometry_encoder_inputs
-        # video exist in the data
-        elif "video" in self.list_data_dict[i]:
+        elif "video" in sample:
             data_dict["pixel_values_videos"] = video
             data_dict["video_grid_thw"] = grid_thw
-        
-        data_dict["tag"] = self.list_data_dict[i].get("tag", "2d")
+
+        data_dict["tag"] = sample.get("tag", "2d")
         return data_dict
 
 
@@ -861,4 +857,3 @@ def make_supervised_data_module(
 
 
 if __name__ == "__main__":
-    pass
