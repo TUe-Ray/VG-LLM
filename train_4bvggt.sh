@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=random_vggt_4b_train
+#SBATCH --job-name=<dbg>_4b_vggt_hdf5_add
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=14:30:00
+#SBATCH --time=00:20:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=normal  # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=boost_qos_dbg # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="use randomlize vggt weight as encoder, using add(+) fusion, lr 5e-6, no hdf5"
+NOTE="<dbg> test 4b vggt geometry encoder with hdf5 dataset and add fusion"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
