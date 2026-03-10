@@ -211,7 +211,7 @@ echo "  use_geometry_encoder:    true"
 echo "  geometry_encoder_type:   $GEOMETRY_ENCODER_TYPE"
 echo "  geometry_encoder_path:   $GEOMETRY_ENCODER_PATH"
 echo "  feature_fusion_method:   add"
-echo "  geometry_encoder_random_init: True"
+echo "  geometry_encoder_random_init: False"
 
 echo "--- DataArguments ---"
 echo "  dataset_use:             $DATASETS"
@@ -223,7 +223,9 @@ echo "  video_max_frames:        8"
 echo "  video_min_frames:        4"
 echo "  video_max_frame_pixels:  $((1664*28*28))"
 echo "  video_min_frame_pixels:  $((256*28*28))"
-echo "  use_hdf5:                false"
+echo "  use_hdf5:                $USE_HDF5"
+echo "  hdf5_path:               $HDF5_PATH"
+echo "  hdf5_num_shards:         $HDF5_NUM_SHARDS"
 
 echo "--- TrainingArguments ---"
 echo "  run_name:                ${SLURM_JOB_NAME}_${SLURM_JOB_ID}"
@@ -243,7 +245,7 @@ echo "  lr_scheduler_type:       cosine"
 echo "  weight_decay:            0.01"
 echo "  logging_steps:           50"
 echo "  save_steps:              200"
-echo "  save_total_limit:        2"
+echo "  save_total_limit:        1"
 echo "  deepspeed:               scripts/zero2_opt.json"
 echo "  gradient_checkpointing:  true"
 echo "  dataloader_num_workers:  4"
@@ -293,7 +295,7 @@ srun --export=ALL \
       --weight_decay 0.01 \
       --logging_steps 50 \
       --save_steps 200 \
-      --save_total_limit 2 \
+      --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
       --dataloader_num_workers 4 \
@@ -304,6 +306,8 @@ srun --export=ALL \
       --geometry_encoder_type "$GEOMETRY_ENCODER_TYPE" \
       --geometry_encoder_path "$GEOMETRY_ENCODER_PATH" \
       --feature_fusion_method "add" \
-      --use_hdf5 "false" \
-      --geometry_encoder_random_init true \
+      --use_hdf5 "$USE_HDF5" \
+      --hdf5_path "$HDF5_PATH" \
+      --hdf5_num_shards "$HDF5_NUM_SHARDS" \
+      --geometry_encoder_random_init false \
   2>&1 | tee "$OUTPUT_DIR/train.log"

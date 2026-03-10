@@ -8,14 +8,33 @@ import time
 import math
 import itertools
 import ast
+import hashlib
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence, List, Tuple
 from io import BytesIO
 import base64
 from collections.abc import Sequence
-# from io import BytesIO
-# import h5py
-# from torch.utils.data import get_worker_info
+import h5py
+from torch.utils.data import get_worker_info
+
+# ── Per-worker HDF5 handle cache ──────────────────────────────────────────────
+# Lives at module level so it is local to each forked DataLoader worker process.
+# Handles are opened lazily and kept open for the lifetime of the worker.
+_worker_h5_handles: dict = {}
+
+
+def _get_h5_handle(shard_path: str) -> h5py.File:
+    """Return a cached read-only HDF5 file handle for the given shard."""
+    if shard_path not in _worker_h5_handles:
+        _worker_h5_handles[shard_path] = h5py.File(shard_path, "r", swmr=True)
+    return _worker_h5_handles[shard_path]
+
+
+def _get_shard_path(hdf5_dir: str, rel_path: str, num_shards: int) -> str:
+    """Return the shard file that contains *rel_path* (same formula as converter)."""
+    idx = int(hashlib.md5(rel_path.encode()).hexdigest(), 16) % num_shards
+    return os.path.join(hdf5_dir, f"shard_{idx:04d}.h5")
+# ─────────────────────────────────────────────────────────────────────────────
 
 import numpy as np
 import torch
@@ -191,7 +210,14 @@ class LazySupervisedDataset(Dataset):
         self.data_args.image_processor.size["longest_edge"] = data_args.max_pixels
         self.data_args.image_processor.size["shortest_edge"] = data_args.min_pixels
         self.use_hdf5 = getattr(data_args, "use_hdf5", False)
-        self.hdf5_path = getattr(data_args, "hdf5_path", None)
+        self.hdf5_path = getattr(data_args, "hdf5_path", None)  # directory of shards
+        self.hdf5_num_shards = getattr(data_args, "hdf5_num_shards", 32)
+        if self.use_hdf5:
+            if self.hdf5_path is None or not os.path.isdir(self.hdf5_path):
+                raise ValueError(
+                    f"use_hdf5=True but hdf5_path='{self.hdf5_path}' is not a directory. "
+                    "Pass the directory that contains the shard_XXXX.h5 files."
+                )
 
     def __len__(self):
         return len(self.list_data_dict)
@@ -282,7 +308,39 @@ class LazySupervisedDataset(Dataset):
     #         img = Image.open(x)
     #     return img.convert("RGB")
 
+    # ── HDF5 helpers ─────────────────────────────────────────────────────────
 
+    def _hdf5_open_image(self, rel_path: str) -> Image.Image:
+        """Open a single image from the appropriate HDF5 shard (read-only)."""
+        shard_path = _get_shard_path(self.hdf5_path, rel_path, self.hdf5_num_shards)
+        h5 = _get_h5_handle(shard_path)
+        jpeg_bytes = h5[rel_path][()].tobytes()
+        return Image.open(BytesIO(jpeg_bytes)).convert("RGB")
+
+    def _hdf5_list_video_frames(self, video_dir: str) -> List[str]:
+        """
+        Return sorted relative frame paths for a video directory stored in HDF5.
+        The group key is the video dir path; leaves are individual frame filenames.
+        Equivalent to: sorted(os.path.join(video_dir, f) for f in os.listdir(full_dir))
+        """
+        # All frame files land in the same shard as the directory key itself.
+        # We need to scan across shards because frames are sharded by file path,
+        # not by directory.  Use the metadata group stored by the converter.
+        # Simpler: collect across all shards (handles are cached, so no extra I/O cost
+        # once a worker has seen a shard before).
+        frame_rel_paths = []
+        for shard_idx in range(self.hdf5_num_shards):
+            shard_path = os.path.join(self.hdf5_path, f"shard_{shard_idx:04d}.h5")
+            h5 = _get_h5_handle(shard_path)
+            try:
+                grp = h5[video_dir]
+                for fname in grp.keys():
+                    frame_rel_paths.append(f"{video_dir}/{fname}")
+            except KeyError:
+                pass
+        return sorted(frame_rel_paths)
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     def process_image_unified(self, image_file):
         processor = copy.deepcopy(self.data_args.image_processor)
@@ -385,15 +443,7 @@ class LazySupervisedDataset(Dataset):
     def read_video_images(self, source):
         # read video images from the source
         assert isinstance(source["video"], str), "video should be a string"
-        # === New code for reading video frames from hdf5 when use_hdf5=True ===
-        #if getattr(self, "use_hdf5", False):
 
-        # === Original code for reading video frames from a video file path ===
-        video_file = os.path.join(source["data_path"], source["video"])
-        if not os.path.exists(video_file):
-            print(f"File not exist: {video_file}")
-            raise FileNotFoundError
-        
         def get_frame_indices(total_frames, fps=1):
             video_length = total_frames / fps
             interval = getattr(self.data_args, "base_interval", 2)
@@ -405,7 +455,27 @@ class LazySupervisedDataset(Dataset):
             )
             frame_idx = np.linspace(0, total_frames - 1, target_frames, dtype=int)
             frame_idx = np.unique(frame_idx)
-            return frame_idx        
+            return frame_idx
+
+        # ── HDF5 path ────────────────────────────────────────────────────────
+        if self.use_hdf5:
+            # source["video"] is a relative path to a frame directory, e.g.
+            # "llava_hound/frames/rT3BozSwtkA"
+            video_dir = source["video"].replace("\\", "/")
+            frame_rel_paths = self._hdf5_list_video_frames(video_dir)
+            if not frame_rel_paths:
+                print(f"No frames found in HDF5 for video dir: {video_dir}")
+                raise FileNotFoundError
+            frame_idx = get_frame_indices(len(frame_rel_paths), fps=1)
+            selected = [frame_rel_paths[i] for i in frame_idx]
+            images = [self._hdf5_open_image(p) for p in selected]
+            return images
+
+        # ── Original filesystem path ──────────────────────────────────────────
+        video_file = os.path.join(source["data_path"], source["video"])
+        if not os.path.exists(video_file):
+            print(f"File not exist: {video_file}")
+            raise FileNotFoundError
 
         # check whether video_file is a directory
         if os.path.isdir(video_file):
@@ -420,7 +490,6 @@ class LazySupervisedDataset(Dataset):
             avg_fps = vr.get_avg_fps()
             frame_idx = get_frame_indices(total_frames, avg_fps)
             video = vr.get_batch(frame_idx).asnumpy()
-            
             images = [Image.fromarray(frame).convert("RGB") for frame in video]
         return images
 
@@ -468,10 +537,18 @@ class LazySupervisedDataset(Dataset):
             if isinstance(image_file, List):
 
                 if isinstance(image_file[0], str):
-                    image_file = [
-                        os.path.join(image_folder, file) for file in image_file
-                    ]
-                    image_file = [Image.open(img).convert("RGB") for img in image_file]
+                    if self.use_hdf5:
+                        # rel_path is already relative to media root — look it up
+                        # directly in the appropriate HDF5 shard.
+                        image_file = [
+                            self._hdf5_open_image(file.replace("\\", "/"))
+                            for file in image_file
+                        ]
+                    else:
+                        image_file = [
+                            os.path.join(image_folder, file) for file in image_file
+                        ]
+                        image_file = [Image.open(img).convert("RGB") for img in image_file]
                 elif isinstance(image_file[0], Image.Image):
                     pass
                 else:
