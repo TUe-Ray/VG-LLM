@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dbg_4b_vggt_hdf5_add
+#SBATCH --job-name=dbg_hdf5_profiling
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
