@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import gzip
 """
 Convert media files (images / video-frame directories) referenced in training
 JSON annotation files into sharded HDF5 archives.
@@ -144,10 +145,14 @@ def collect_paths_from_json(json_file: str):
 
 def expand_video_dirs(video_dirs: set, media_root: str):
     """
-    For each video directory, list files (sorted) and return all relative
-    frame paths.  Directories that don't exist on disk are logged and skipped.
+    For each video directory, list files (sorted) and return:
+      frame_paths         – set of relative frame file paths
+      frame_to_video_dir  – mapping: rel_frame_path -> parent video_dir
+      video_frame_index   – mapping: video_dir -> sorted frame file names
     """
     frame_paths: set = set()
+    frame_to_video_dir = {}
+    video_frame_index = {}
     missing = []
 
     for video_dir in sorted(video_dirs):
@@ -155,14 +160,25 @@ def expand_video_dirs(video_dirs: set, media_root: str):
         if not os.path.isdir(full_dir):
             missing.append(video_dir)
             continue
-        for fname in os.listdir(full_dir):
-            if os.path.isfile(os.path.join(full_dir, fname)):
-                frame_paths.add(f"{video_dir}/{fname}")
+
+        frame_names = sorted(
+            fname for fname in os.listdir(full_dir)
+            if os.path.isfile(os.path.join(full_dir, fname))
+        )
+
+        video_frame_index[video_dir] = frame_names
+
+        for fname in frame_names:
+            rel_path = f"{video_dir}/{fname}"
+            frame_paths.add(rel_path)
+            frame_to_video_dir[rel_path] = video_dir
 
     if missing:
-        log.warning(f"{len(missing)} video directories not found on disk (first 3: {missing[:3]})")
+        log.warning(
+            f"{len(missing)} video directories not found on disk (first 3: {missing[:3]})"
+        )
 
-    return frame_paths
+    return frame_paths, frame_to_video_dir, video_frame_index
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -236,10 +252,14 @@ def build_hdf5(
     # ── Phase 2: expand video directories ─────────────────────────────────────
     if all_video_dirs:
         log.info(f"Expanding {len(all_video_dirs):,} video frame directories …")
-        frame_paths = expand_video_dirs(all_video_dirs, media_root)
+        frame_paths, frame_to_video_dir, video_frame_index = expand_video_dirs(
+            all_video_dirs, media_root
+        )
         log.info(f"  → {len(frame_paths):,} individual frame files found")
     else:
         frame_paths = set()
+        frame_to_video_dir = {}
+        video_frame_index = {}
 
     all_paths = all_image_paths | frame_paths
     log.info(f"Total unique media files to convert: {len(all_paths):,}")
@@ -249,9 +269,12 @@ def build_hdf5(
         return
 
     # ── Phase 3: assign paths to shards ───────────────────────────────────────
+    # image: use rel_path
+    # video frame: use parent video_dir so that frames of the same video stay together
     shard_bins: dict = defaultdict(list)
     for rel_path in all_paths:
-        shard_bins[get_shard_idx(rel_path, num_shards)].append(rel_path)
+        shard_key = frame_to_video_dir.get(rel_path, rel_path)
+        shard_bins[get_shard_idx(shard_key, num_shards)].append(rel_path)
 
     shard_sizes = [len(shard_bins[i]) for i in range(num_shards)]
     log.info(f"Shard size – min: {min(shard_sizes):,}  max: {max(shard_sizes):,}  "
@@ -287,6 +310,23 @@ def build_hdf5(
     log.info(f"  Written:  {total_written:,}")
     log.info(f"  Skipped (already existed): {total_skipped:,}")
     log.info(f"  Errors:   {len(all_errors):,}")
+    # ── Write video index for fast runtime lookup ─────────────────────────────
+    # Each video_dir maps to:
+    #   - shard_idx: where all its frames are stored
+    #   - frames: sorted frame file names (not full paths, to reduce file size)
+    video_index = {
+        video_dir: {
+            "shard_idx": get_shard_idx(video_dir, num_shards),
+            "frames": frame_names,
+        }
+        for video_dir, frame_names in video_frame_index.items()
+    }
+
+    index_path = os.path.join(output_dir, "video_frames_index.json.gz")
+    with gzip.open(index_path, "wt", encoding="utf-8") as fh:
+        json.dump(video_index, fh)
+
+    log.info(f"Video index written to {index_path}")
 
     # ── Write metadata ─────────────────────────────────────────────────────────
     metadata = {
@@ -298,6 +338,7 @@ def build_hdf5(
         "quality": quality,
         "json_files": json_files,
         "media_root": media_root,
+        "video_index_path": index_path,
         "elapsed_seconds": round(elapsed, 1),
     }
     meta_path = os.path.join(output_dir, "metadata.json")

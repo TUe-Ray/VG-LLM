@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=build_hdf5
+#SBATCH --job-name=build_hdf5_new
 #SBATCH --partition=lrd_all_serial
 #SBATCH --account=euhpc_d32_006
 #SBATCH --nodes=1
