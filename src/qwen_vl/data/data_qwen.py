@@ -43,6 +43,12 @@ _profile_state = defaultdict(
         "final_pack": 0.0,
         "unaccounted": 0.0,
 
+        # new: fair decode metrics
+        "video_hdf5_decode_time": 0.0,
+        "video_hdf5_decode_images": 0,
+        "image_hdf5_decode_time": 0.0,
+        "image_hdf5_decode_images": 0,
+
         # collator
         "collator_count": 0,
         "collator_total": 0.0,
@@ -95,6 +101,15 @@ def _profile_update(stats: dict, is_collator: bool = False):
     if not is_collator:
         n = state["count"]
         if n > 0 and n % _profile_every() == 0:
+            video_ms_per_image = (
+                1000.0 * state["video_hdf5_decode_time"] / state["video_hdf5_decode_images"]
+                if state["video_hdf5_decode_images"] > 0 else 0.0
+            )
+            image_ms_per_image = (
+                1000.0 * state["image_hdf5_decode_time"] / state["image_hdf5_decode_images"]
+                if state["image_hdf5_decode_images"] > 0 else 0.0
+            )
+
             print(
                 "[DATA PROF] "
                 f"rank={key[0]} worker={key[1]} n={n} "
@@ -110,7 +125,9 @@ def _profile_update(stats: dict, is_collator: bool = False):
                 f"text_preprocess={state['text_preprocess']/n:.4f}s "
                 f"rope={state['rope']/n:.4f}s "
                 f"final_pack={state['final_pack']/n:.4f}s "
-                f"unaccounted={state['unaccounted']/n:.4f}s"
+                f"unaccounted={state['unaccounted']/n:.4f}s "
+                f"video_hdf5_decode_ms_per_image={video_ms_per_image:.3f} "
+                f"image_hdf5_decode_ms_per_image={image_ms_per_image:.3f}"
             )
 
     else:
@@ -560,11 +577,16 @@ class LazySupervisedDataset(Dataset):
             selected = [frame_rel_paths[i] for i in frame_idx]
 
             t1 = time.perf_counter()
+            t1 = time.perf_counter()
             if shard_idx is not None:
                 images = [self._hdf5_open_image_from_shard(shard_idx, p) for p in selected]
             else:
                 images = [self._hdf5_open_image(p) for p in selected]
-            prof["open_images"] = prof.get("open_images", 0.0) + (time.perf_counter() - t1)
+            decode_time = time.perf_counter() - t1
+
+            prof["open_images"] = prof.get("open_images", 0.0) + decode_time
+            prof["video_hdf5_decode_time"] = prof.get("video_hdf5_decode_time", 0.0) + decode_time
+            prof["video_hdf5_decode_images"] = prof.get("video_hdf5_decode_images", 0) + len(selected)
 
             return images
 
@@ -671,12 +693,16 @@ class LazySupervisedDataset(Dataset):
                             self._hdf5_open_image(file.replace("\\", "/"))
                             for file in image_file
                         ]
+                        decode_time = time.perf_counter() - t0
+                        prof["path_to_pil"] += decode_time
+                        prof["image_hdf5_decode_time"] += decode_time
+                        prof["image_hdf5_decode_images"] += len(image_file)
                     else:
                         image_file = [
                             os.path.join(image_folder, file) for file in image_file
                         ]
                         image_file = [Image.open(img).convert("RGB") for img in image_file]
-                    prof["path_to_pil"] += time.perf_counter() - t0
+                        prof["path_to_pil"] += time.perf_counter() - t0
                 elif isinstance(image_file[0], Image.Image):
                     pass
                 else:
@@ -797,9 +823,6 @@ class LazySupervisedDataset(Dataset):
 
         data_dict["tag"] = sample.get("tag", "2d")
         prof["final_pack"] += time.perf_counter() - t0
-        prof["total"] += time.perf_counter() - t_item0
-
-
         prof["total"] += time.perf_counter() - t_item0
 
         measured = (
