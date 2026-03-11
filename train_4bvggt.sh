@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dbg_hdf5_6_dataloader_workers
+#SBATCH --job-name=dbg_profiling_normal
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -10,10 +10,10 @@
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
-#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088,lrdn0183
+#SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088,lrdn0183,lrdn0258
 #SBATCH --exclusive
 
-NOTE="<dbg> Testing with 6 dataloader workers to see if it improves training speed without causing instability. Also checking HDF5 data loading performance and potential bottlenecks. This is a short test run (20 mins) on 2 nodes with 4 GPUs each, using the vggt geometry encoder and the specified datasets. The main goal is to profile the data loading and see if increasing workers helps with throughput, especially when using HDF5 format."
+NOTE="<dbg> profiling with normal dataloder"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
