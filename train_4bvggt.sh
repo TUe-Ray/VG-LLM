@@ -51,7 +51,7 @@ CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                       
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 # HDF5 configuration
-USE_HDF5="true"
+USE_HDF5="false"  # Set to "true" to enable HDF5 data loading
 HDF5_PATH="$FAST/data/vgllm/hdf5"
 HDF5_NUM_SHARDS=32
 

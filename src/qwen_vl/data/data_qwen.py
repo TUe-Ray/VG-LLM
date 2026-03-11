@@ -49,6 +49,12 @@ _profile_state = defaultdict(
         "image_hdf5_decode_time": 0.0,
         "image_hdf5_decode_images": 0,
 
+        # FS decode metrics
+        "video_fs_decode_time": 0.0,
+        "video_fs_decode_images": 0,
+        "image_fs_decode_time": 0.0,
+        "image_fs_decode_images": 0,
+
         # collator
         "collator_count": 0,
         "collator_total": 0.0,
@@ -101,13 +107,21 @@ def _profile_update(stats: dict, is_collator: bool = False):
     if not is_collator:
         n = state["count"]
         if n > 0 and n % _profile_every() == 0:
-            video_ms_per_image = (
+            video_hdf5_ms_per_image = (
                 1000.0 * state["video_hdf5_decode_time"] / state["video_hdf5_decode_images"]
                 if state["video_hdf5_decode_images"] > 0 else 0.0
             )
-            image_ms_per_image = (
+            image_hdf5_ms_per_image = (
                 1000.0 * state["image_hdf5_decode_time"] / state["image_hdf5_decode_images"]
                 if state["image_hdf5_decode_images"] > 0 else 0.0
+            )
+            video_fs_ms_per_image = (
+                1000.0 * state["video_fs_decode_time"] / state["video_fs_decode_images"]
+                if state["video_fs_decode_images"] > 0 else 0.0
+            )
+            image_fs_ms_per_image = (
+                1000.0 * state["image_fs_decode_time"] / state["image_fs_decode_images"]
+                if state["image_fs_decode_images"] > 0 else 0.0
             )
 
             print(
@@ -126,8 +140,10 @@ def _profile_update(stats: dict, is_collator: bool = False):
                 f"rope={state['rope']/n:.4f}s "
                 f"final_pack={state['final_pack']/n:.4f}s "
                 f"unaccounted={state['unaccounted']/n:.4f}s "
-                f"video_hdf5_decode_ms_per_image={video_ms_per_image:.3f} "
-                f"image_hdf5_decode_ms_per_image={image_ms_per_image:.3f}"
+                f"video_hdf5_decode_ms_per_image={video_hdf5_ms_per_image:.3f} "
+                f"image_hdf5_decode_ms_per_image={image_hdf5_ms_per_image:.3f} "
+                f"video_fs_decode_ms_per_image={video_fs_ms_per_image:.3f} "
+                f"image_fs_decode_ms_per_image={image_fs_ms_per_image:.3f}"
             )
 
     else:
@@ -598,18 +614,35 @@ class LazySupervisedDataset(Dataset):
 
         # check whether video_file is a directory
         if os.path.isdir(video_file):
-            frame_files = [os.path.join(video_file, f) for f in os.listdir(video_file) if os.path.isfile(os.path.join(video_file, f))]
+            frame_files = [
+                os.path.join(video_file, f)
+                for f in os.listdir(video_file)
+                if os.path.isfile(os.path.join(video_file, f))
+            ]
             frame_files.sort()
             frame_idx = get_frame_indices(len(frame_files), 1)
-            images = [frame_files[i] for i in frame_idx]
-            images = [Image.open(frame).convert("RGB") for frame in images]
+            selected = [frame_files[i] for i in frame_idx]
+
+            t1 = time.perf_counter()
+            images = [Image.open(frame).convert("RGB") for frame in selected]
+            decode_time = time.perf_counter() - t1
+
+            prof["video_fs_decode_time"] = prof.get("video_fs_decode_time", 0.0) + decode_time
+            prof["video_fs_decode_images"] = prof.get("video_fs_decode_images", 0) + len(selected)
+
         elif any([video_file.endswith(ext) for ext in [".mp4", ".avi", ".mov"]]):
+            t1 = time.perf_counter()
             vr = VideoReader(video_file, num_threads=4)
             total_frames = len(vr)
             avg_fps = vr.get_avg_fps()
             frame_idx = get_frame_indices(total_frames, avg_fps)
             video = vr.get_batch(frame_idx).asnumpy()
             images = [Image.fromarray(frame).convert("RGB") for frame in video]
+            decode_time = time.perf_counter() - t1
+
+            prof["video_fs_decode_time"] = prof.get("video_fs_decode_time", 0.0) + decode_time
+            prof["video_fs_decode_images"] = prof.get("video_fs_decode_images", 0) + len(frame_idx)
+
         return images
 
     def _get_item(self, i) -> Dict[str, torch.Tensor]:
@@ -651,10 +684,16 @@ class LazySupervisedDataset(Dataset):
             "rope": 0.0,
             "final_pack": 0.0,
             "unaccounted": 0.0,
+
             "video_hdf5_decode_time": 0.0,
             "video_hdf5_decode_images": 0,
             "image_hdf5_decode_time": 0.0,
             "image_hdf5_decode_images": 0,
+
+            "video_fs_decode_time": 0.0,
+            "video_fs_decode_images": 0,
+            "image_fs_decode_time": 0.0,
+            "image_fs_decode_images": 0,
         }
 
         t_item0 = time.perf_counter()
@@ -706,7 +745,11 @@ class LazySupervisedDataset(Dataset):
                             os.path.join(image_folder, file) for file in image_file
                         ]
                         image_file = [Image.open(img).convert("RGB") for img in image_file]
-                        prof["path_to_pil"] += time.perf_counter() - t0
+                        decode_time = time.perf_counter() - t0
+
+                        prof["path_to_pil"] += decode_time
+                        prof["image_fs_decode_time"] += decode_time
+                        prof["image_fs_decode_images"] += len(image_file)
                 elif isinstance(image_file[0], Image.Image):
                     pass
                 else:
@@ -846,7 +889,7 @@ class LazySupervisedDataset(Dataset):
 
         _profile_update(prof)
         return data_dict
-        return data_dict
+
 
 
 def pad_and_cat(tensor_list):
