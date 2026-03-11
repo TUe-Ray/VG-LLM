@@ -27,12 +27,30 @@ _worker_h5_handles: dict = {}
 _profile_state = defaultdict(
     lambda: {
         "count": 0,
+
+        # dataset
         "total": 0.0,
+        "sample_copy": 0.0,
+        "video_to_images": 0.0,
         "list_frames": 0.0,
         "open_images": 0.0,
+        "path_to_pil": 0.0,
         "draw_marks": 0.0,
         "prepare_inputs": 0.0,
-        "text_and_rope": 0.0,
+        "grid_merge": 0.0,
+        "text_preprocess": 0.0,
+        "rope": 0.0,
+        "final_pack": 0.0,
+        "unaccounted": 0.0,
+
+        # collator
+        "collator_count": 0,
+        "collator_total": 0.0,
+        "pad_ids": 0.0,
+        "collect_images": 0.0,
+        "cat_images": 0.0,
+        "cat_videos": 0.0,
+        "geometry_inputs": 0.0,
     }
 )
 
@@ -56,29 +74,58 @@ def _profile_should_print():
     wi = get_worker_info()
     return wi is None or wi.id == 0
 
-def _profile_update(stats: dict):
+def _profile_update(stats: dict, is_collator: bool = False):
     if not _profile_enabled():
         return
 
     key = _profile_key()
     state = _profile_state[key]
-    state["count"] += 1
+
+    if is_collator:
+        state["collator_count"] += 1
+    else:
+        state["count"] += 1
 
     for k, v in stats.items():
         state[k] += float(v)
 
-    if _profile_should_print() and state["count"] % _profile_every() == 0:
+    if not _profile_should_print():
+        return
+
+    if not is_collator:
         n = state["count"]
-        print(
-            "[DATA PROF] "
-            f"rank={key[0]} worker={key[1]} n={n} "
-            f"total={state['total']/n:.4f}s "
-            f"list_frames={state['list_frames']/n:.4f}s "
-            f"open_images={state['open_images']/n:.4f}s "
-            f"draw_marks={state['draw_marks']/n:.4f}s "
-            f"prepare_inputs={state['prepare_inputs']/n:.4f}s "
-            f"text_and_rope={state['text_and_rope']/n:.4f}s"
-        )
+        if n > 0 and n % _profile_every() == 0:
+            print(
+                "[DATA PROF] "
+                f"rank={key[0]} worker={key[1]} n={n} "
+                f"total={state['total']/n:.4f}s "
+                f"sample_copy={state['sample_copy']/n:.4f}s "
+                f"video_to_images={state['video_to_images']/n:.4f}s "
+                f"list_frames={state['list_frames']/n:.4f}s "
+                f"open_images={state['open_images']/n:.4f}s "
+                f"path_to_pil={state['path_to_pil']/n:.4f}s "
+                f"draw_marks={state['draw_marks']/n:.4f}s "
+                f"prepare_inputs={state['prepare_inputs']/n:.4f}s "
+                f"grid_merge={state['grid_merge']/n:.4f}s "
+                f"text_preprocess={state['text_preprocess']/n:.4f}s "
+                f"rope={state['rope']/n:.4f}s "
+                f"final_pack={state['final_pack']/n:.4f}s "
+                f"unaccounted={state['unaccounted']/n:.4f}s"
+            )
+
+    else:
+        n = state["collator_count"]
+        if n > 0 and n % _profile_every() == 0:
+            print(
+                "[COLLATE PROF] "
+                f"rank={key[0]} worker={key[1]} n={n} "
+                f"collator_total={state['collator_total']/n:.4f}s "
+                f"pad_ids={state['pad_ids']/n:.4f}s "
+                f"collect_images={state['collect_images']/n:.4f}s "
+                f"cat_images={state['cat_images']/n:.4f}s "
+                f"cat_videos={state['cat_videos']/n:.4f}s "
+                f"geometry_inputs={state['geometry_inputs']/n:.4f}s"
+            )
 
 def _get_h5_handle(shard_path: str) -> h5py.File:
     """Return a cached read-only HDF5 file handle for the given shard."""
@@ -568,7 +615,12 @@ class LazySupervisedDataset(Dataset):
         # assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
         # video = None
 
+        t_item0 = time.perf_counter()
+
+        t0 = time.perf_counter()
         sample = copy.deepcopy(self.list_data_dict[i])
+        prof["sample_copy"] += time.perf_counter() - t0
+
         sources = [sample]
         video = None
         prof = {
@@ -582,7 +634,9 @@ class LazySupervisedDataset(Dataset):
         t_item0 = time.perf_counter()
         # Convert video-dir sample into image sequence lazily, but do NOT mutate original dataset
         if "video" in sample:
+            t0 = time.perf_counter()
             sample["images"] = self.read_video_images(sample, prof=prof)
+            prof["video_to_images"] += time.perf_counter() - t0
             num_image = len(sample["images"])
             sample["conversations"][0]["value"] = sample["conversations"][0]["value"].replace(
                 DEFAULT_VIDEO_TOKEN, "".join([DEFAULT_IMAGE_TOKEN] * num_image)
@@ -604,6 +658,7 @@ class LazySupervisedDataset(Dataset):
 
             if isinstance(image_file, List):
                 if isinstance(image_file[0], str):
+                    t0 = time.perf_counter()
                     if self.use_hdf5:
                         image_file = [
                             self._hdf5_open_image(file.replace("\\", "/"))
@@ -614,6 +669,7 @@ class LazySupervisedDataset(Dataset):
                             os.path.join(image_folder, file) for file in image_file
                         ]
                         image_file = [Image.open(img).convert("RGB") for img in image_file]
+                    prof["path_to_pil"] += time.perf_counter() - t0
                 elif isinstance(image_file[0], Image.Image):
                     pass
                 else:
@@ -634,20 +690,27 @@ class LazySupervisedDataset(Dataset):
                 grid_thw.append(ret["image_grid_thw"])
             prof["prepare_inputs"] += time.perf_counter() - t_prepare
 
+            t0 = time.perf_counter()
             grid_thw_merged = [
                 merged_thw.prod() // self.data_args.image_processor.merge_size**2
                 for merged_thw in copy.deepcopy(grid_thw)
             ]
+            prof["grid_merge"] += time.perf_counter() - t0
 
+            t0 = time.perf_counter()
             conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
                 conv_sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="image"
             )
+            prof["text_preprocess"] += time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             position_ids, _ = self.get_rope_index(
                 self.data_args.image_processor.merge_size,
                 data_dict["input_ids"],
                 torch.stack(grid_thw, dim=0),
             )
+            prof["rope"] += time.perf_counter() - t0
 
         elif "video" in sample:
             # This branch is kept for true video-file inputs (.mp4/.avi/.mov)
@@ -677,30 +740,38 @@ class LazySupervisedDataset(Dataset):
                 merged_thw.prod() // self.data_args.image_processor.merge_size**2
                 for merged_thw in grid_thw_merged
             ]
-            t_text = time.perf_counter()
+            t0 = time.perf_counter()
             conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
                 conv_sources, self.tokenizer, grid_thw=grid_thw_merged, visual_type="video"
             )
+            prof["text_preprocess"] += time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             position_ids, _ = self.get_rope_index(
                 self.data_args.image_processor.merge_size,
                 data_dict["input_ids"],
                 video_grid_thw=torch.stack(grid_thw, dim=0),
                 second_per_grid_ts=second_per_grid_ts,
             )
-            prof["text_and_rope"] += time.perf_counter() - t_text
+            prof["rope"] += time.perf_counter() - t0
         else:
+            t0 = time.perf_counter()
             conv_sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
                 conv_sources, self.tokenizer, grid_thw=None
             )
+            prof["text_preprocess"] += time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             position_ids = (
                 torch.arange(0, data_dict["input_ids"].size(1))
                 .view(1, -1)
                 .unsqueeze(0)
                 .expand(3, -1, -1)
             )
-
+            prof["rope"] += time.perf_counter() - t0
+        t0 = time.perf_counter()
         if isinstance(i, int):
             data_dict = dict(
                 input_ids=data_dict["input_ids"][0],
@@ -718,9 +789,29 @@ class LazySupervisedDataset(Dataset):
             data_dict["video_grid_thw"] = grid_thw
 
         data_dict["tag"] = sample.get("tag", "2d")
+        prof["final_pack"] += time.perf_counter() - t0
+        prof["total"] += time.perf_counter() - t_item0
+
 
         prof["total"] += time.perf_counter() - t_item0
+
+        measured = (
+            prof["sample_copy"]
+            + prof["video_to_images"]
+            + prof["list_frames"]
+            + prof["open_images"]
+            + prof["path_to_pil"]
+            + prof["draw_marks"]
+            + prof["prepare_inputs"]
+            + prof["grid_merge"]
+            + prof["text_preprocess"]
+            + prof["rope"]
+            + prof["final_pack"]
+        )
+        prof["unaccounted"] += max(0.0, prof["total"] - measured)
+
         _profile_update(prof)
+        return data_dict
         return data_dict
 
 
@@ -745,10 +836,20 @@ class DataCollatorForSupervisedDataset(object):
     tokenizer: transformers.PreTrainedTokenizer
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        coll_prof = {
+            "collator_total": 0.0,
+            "pad_ids": 0.0,
+            "collect_images": 0.0,
+            "cat_images": 0.0,
+            "cat_videos": 0.0,
+            "geometry_inputs": 0.0,
+        }
+        t_coll0 = time.perf_counter()
         input_ids, labels, position_ids = tuple(
             [instance[key] for instance in instances]
             for key in ("input_ids", "labels", "position_ids")
         )
+        t0 = time.perf_counter()
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
         )
@@ -756,6 +857,7 @@ class DataCollatorForSupervisedDataset(object):
             labels, batch_first=True, padding_value=IGNORE_INDEX
         )
         position_ids = pad_and_cat(position_ids)
+        coll_prof["pad_ids"] += time.perf_counter() - t0
         input_ids = input_ids[:, : self.tokenizer.model_max_length]
         labels = labels[:, : self.tokenizer.model_max_length]
         position_ids = position_ids[:, :, : self.tokenizer.model_max_length]
@@ -764,6 +866,7 @@ class DataCollatorForSupervisedDataset(object):
             labels=labels,
             attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
         )
+        t0 = time.perf_counter()
         images = list(
             itertools.chain(
                 *(
@@ -782,6 +885,8 @@ class DataCollatorForSupervisedDataset(object):
                 )
             )
         )
+        coll_prof["collect_images"] += time.perf_counter() - t0
+        t0 = time.perf_counter()
         if len(images) != 0:
             concat_images = torch.cat([image for image in images], dim=0)
             grid_thw = list(
@@ -797,7 +902,9 @@ class DataCollatorForSupervisedDataset(object):
         else:
             concat_images = None
             grid_thw = None
+        coll_prof["cat_images"] += time.perf_counter() - t0
 
+        t0 = time.perf_counter()
         if len(videos) != 0:
             concat_videos = torch.cat([video for video in videos], dim=0)
             video_grid_thw = list(
@@ -813,7 +920,7 @@ class DataCollatorForSupervisedDataset(object):
         else:
             concat_videos = None
             video_grid_thw = None
-
+        coll_prof["cat_videos"] += time.perf_counter() - t0
         batch["pixel_values"] = concat_images
         batch["image_grid_thw"] = grid_thw
         batch["pixel_values_videos"] = concat_videos
@@ -821,11 +928,13 @@ class DataCollatorForSupervisedDataset(object):
         batch["position_ids"] = position_ids
                 
         # assume all data in a batch has geometry_encoder_inputs
+        t0 = time.perf_counter()
         if "geometry_encoder_inputs" in instances[0]:
             geometry_encoder_inputs = [torch.stack(instance["geometry_encoder_inputs"]) for instance in instances]
             batch["geometry_encoder_inputs"] = geometry_encoder_inputs
             assert len(set([instance["tag"] for instance in instances])) == 1, "all data in a batch should have the same tag"
             batch["tag"] = instances[0]["tag"]
+        coll_prof["geometry_inputs"] += time.perf_counter() - t0
         return batch
 
 
@@ -888,7 +997,7 @@ class FlattenedDataCollatorForSupervisedDataset(DataCollatorForSupervisedDataset
         else:
             concat_images = None
             grid_thw = None
-
+        
         if len(videos) != 0:
             concat_videos = torch.cat([video for video in videos], dim=0)
             video_grid_thw = list(
