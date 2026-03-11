@@ -615,6 +615,22 @@ class LazySupervisedDataset(Dataset):
         # assert len(sources) == 1, "Don't know why it is wrapped to a list"  # FIXME
         # video = None
 
+        prof = {
+            "total": 0.0,
+            "sample_copy": 0.0,
+            "video_to_images": 0.0,
+            "list_frames": 0.0,
+            "open_images": 0.0,
+            "path_to_pil": 0.0,
+            "draw_marks": 0.0,
+            "prepare_inputs": 0.0,
+            "grid_merge": 0.0,
+            "text_preprocess": 0.0,
+            "rope": 0.0,
+            "final_pack": 0.0,
+            "unaccounted": 0.0,
+        }
+
         t_item0 = time.perf_counter()
 
         t0 = time.perf_counter()
@@ -623,15 +639,6 @@ class LazySupervisedDataset(Dataset):
 
         sources = [sample]
         video = None
-        prof = {
-            "total": 0.0,
-            "list_frames": 0.0,
-            "open_images": 0.0,
-            "draw_marks": 0.0,
-            "prepare_inputs": 0.0,
-            "text_and_rope": 0.0,
-        }
-        t_item0 = time.perf_counter()
         # Convert video-dir sample into image sequence lazily, but do NOT mutate original dataset
         if "video" in sample:
             t0 = time.perf_counter()
