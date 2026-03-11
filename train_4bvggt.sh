@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=new_train_sbatch
+#SBATCH --job-name=dbg_makeSurework
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088
 #SBATCH --exclusive
 
-NOTE="try new sbatch file"
+NOTE="make sure that new dataqwen works on main branch"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
