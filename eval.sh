@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=noGeoEncoder_eval
+#SBATCH --job-name=qwen2_5_3b_eval
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=4             # 依你的叢集格式：也可能是 --gpus-per-node=1
 #SBATCH --ntasks-per-node=1       # 通常 1 個 task，裡面用 torchrun 起多 GPU processes
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,,lrdn0080
 
 
-NOTE="Eval No Geometry Encoder model on VSiBench"
+NOTE="Eval Qwen2_5_3b model on VSiBench"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -39,8 +39,8 @@ echo "Job Time Limit: $JOB_TIME_LIMIT"
 # === User-defined variables ===
 benchmark=vsibench # choices: [vsibench, cvbench, blink_spatial]
 output_path=/leonardo_scratch/fast/EUHPC_D32_006/eval/logs/$(date "+%Y%m%d_%H%M%S")
-#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/vgllm-qa-vggt-4b
-model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/noGeoEncoder/checkpoints
+model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/qwen2_5_3b
+#model_path=/leonardo_scratch/fast/EUHPC_D32_006/hf_models/train/noGeoEncoder/checkpoints
 
 echo "=== Evaluation Configuration ==="
 echo "Benchmark: $benchmark"
@@ -101,7 +101,7 @@ export NCCL_NVLS_ENABLE=0
 # === Start Evaluation ===
 
 accelerate launch --num_processes=4 -m lmms_eval \
-    --model vgllm \
+    --model qwen2_5_vl \
     --model_args pretrained=$model_path,use_flash_attention_2=true,max_num_frames=32,max_length=12800 \
     --tasks ${benchmark} \
     --batch_size 1 \
