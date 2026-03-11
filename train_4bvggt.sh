@@ -20,25 +20,6 @@ echo "  note: $NOTE"
 
 DATASETS="spar_234k,llava_hound_64k"
 LR="5e-6"
-# ======================
-# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
-# ======================
-MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
-GEOMETRY_ENCODER_TYPE="vggt"          
-GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" 
-
-OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
-CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
-mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
-
-PER_DEVICE_BS=1
-TOTAL_BATCH_SIZE=64
-JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
-
-
-set -euo pipefail
-
-
 
 echo "=== SLURM Job Specifications ==="
 echo "Job Name: $SLURM_JOB_NAME"
@@ -54,6 +35,20 @@ echo "Memory per Node: $SLURM_MEM_PER_NODE"
 echo "Output: $SLURM_STDOUT"
 echo "Error: $SLURM_STDERR"
 echo "Job Time Limit: $JOB_TIME_LIMIT"
+# ======================
+# Paths / Config (從 train_sr.sh 來的參數，改成你自己的)
+# ======================
+MODEL_PATH="$FAST/hf_models/qwen2_5_3b"  
+GEOMETRY_ENCODER_TYPE="vggt"          
+GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" 
+
+OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
+mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
+
+PER_DEVICE_BS=1
+TOTAL_BATCH_SIZE=64
+JOB_TIME_LIMIT=$(squeue -j $SLURM_JOB_ID -h -o "%l")
 
 echo "=== Job Configuration ==="
 echo "MODEL_PATH: $MODEL_PATH"
@@ -62,6 +57,7 @@ echo "GEOMETRY_ENCODER_PATH: $GEOMETRY_ENCODER_PATH"
 echo "PER_DEVICE_BS: $PER_DEVICE_BS"
 echo "TOTAL_BATCH_SIZE: $TOTAL_BATCH_SIZE"
 
+set -euo pipefail
 
 # ======================
 # Cluster-specific modules (依你的 launch_training.sh 的想法補完整)
