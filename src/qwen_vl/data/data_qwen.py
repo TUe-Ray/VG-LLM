@@ -651,6 +651,10 @@ class LazySupervisedDataset(Dataset):
             "rope": 0.0,
             "final_pack": 0.0,
             "unaccounted": 0.0,
+            "video_hdf5_decode_time": 0.0,
+            "video_hdf5_decode_images": 0,
+            "image_hdf5_decode_time": 0.0,
+            "image_hdf5_decode_images": 0,
         }
 
         t_item0 = time.perf_counter()
