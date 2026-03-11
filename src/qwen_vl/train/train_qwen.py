@@ -391,7 +391,6 @@ def train(attn_implementation="flash_attention_2"):
     
     # Create supervised training data module (handles data loading and preprocessing)
     # 建立監督式訓練資料模組（處理資料載入和預處理）
-    #INCOMPLETE: use the correct data module for geometry encoder if needed
     data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
     
     # Initialize Hugging Face trainer with model, tokenizer, and data
