@@ -194,6 +194,8 @@ declare -A DATA_ARGS=(
   [video_max_frame_pixels]=$((1664*28*28))
   [video_min_frame_pixels]=$((256*28*28))
   [use_hdf5]="false"
+  [hdf5_path]="None"
+  [hdf5_num_shards]="32"
 )
 
 declare -A TRAINING_ARGS=(

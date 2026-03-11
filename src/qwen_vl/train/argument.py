@@ -35,6 +35,7 @@ class DataArguments:
     shuffle: bool = field(default=True)
     use_hdf5: bool = field(default=False)
     hdf5_path: Optional[str] = field(default=None)
+    hdf5_num_shards: int = field(default=32)
 
 
 @dataclass
