@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dbg_hdf5_detail_profiling
+#SBATCH --job-name=dbg_hdf5_6_dataloader_workers
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088,lrdn0183
 #SBATCH --exclusive
 
-NOTE="<dbg> test 4b vggt geometry encoder with hdf5 dataset and add fusion"
+NOTE="<dbg> Testing with 6 dataloader workers to see if it improves training speed without causing instability. Also checking HDF5 data loading performance and potential bottlenecks. This is a short test run (20 mins) on 2 nodes with 4 GPUs each, using the vggt geometry encoder and the specified datasets. The main goal is to profile the data loading and see if increasing workers helps with throughput, especially when using HDF5 format."
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -253,7 +253,7 @@ echo "  save_steps:              200"
 echo "  save_total_limit:        1"
 echo "  deepspeed:               scripts/zero2_opt.json"
 echo "  gradient_checkpointing:  true"
-echo "  dataloader_num_workers:  4"
+echo "  dataloader_num_workers:  6"
 echo "  group_by_modality_len:   true"
 echo "  seed:                    0"
 echo "  report_to:               wandb"
@@ -307,7 +307,7 @@ srun --export=ALL \
       --save_total_limit 1 \
       --deepspeed "scripts/zero2_opt.json" \
       --gradient_checkpointing \
-      --dataloader_num_workers 4 \
+      --dataloader_num_workers 6 \
       --group_by_modality_length true \
       --seed 0 \
       --report_to "wandb" \
