@@ -99,10 +99,16 @@ export NCCL_NVLS_ENABLE=0
 
 
 # === Start Evaluation ===
-
 accelerate launch --num_processes=4 -m lmms_eval \
     --model qwen2_5_vl \
-    --model_args pretrained=$model_path,use_flash_attention_2=true,max_num_frames=32,max_length=12800 \
+    --model_args pretrained=$model_path,use_flash_attention_2=true,max_num_frames=32 \
     --tasks ${benchmark} \
     --batch_size 1 \
     --output_path $output_path
+
+# accelerate launch --num_processes=4 -m lmms_eval \
+#     --model qwen2_5_vl \
+#     --model_args pretrained=$model_path,use_flash_attention_2=true,max_num_frames=32,max_length=12800 \
+#     --tasks ${benchmark} \
+#     --batch_size 1 \
+#     --output_path $output_path
