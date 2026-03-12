@@ -69,7 +69,7 @@ def rank0_print(*args):
         print(*args)
 
 
-def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
+def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str, model_args: ModelArguments = None):
     """
     Safely save model state dict to disk, handling both DeepSpeed and regular training scenarios.
     安全地將模型狀態字典儲存到磁碟，處理 DeepSpeed 和一般訓練情境。
@@ -77,6 +77,9 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: st
     對於 DeepSpeed 訓練，使用訓練器的內建儲存方法。
     For regular training, manually saves CPU state dict to avoid GPU memory issues.
     對於一般訓練，手動儲存 CPU 狀態字典以避免 GPU 記憶體問題。
+
+    When LoRA is enabled, saves only the adapter weights (small) instead of the full model.
+    當啟用 LoRA 時，只儲存適配器權重（小型）而非完整模型。
 
     From GPT
     如果用 DeepSpeed（trainer.deepspeed=True）
@@ -91,6 +94,13 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: st
 
     避免某些情況下直接存 GPU tensor 造成額外開銷
     """
+    # LoRA path: save only adapter weights via peft's save_pretrained
+    # LoRA 路徑：透過 peft 的 save_pretrained 只儲存適配器權重
+    if model_args is not None and getattr(model_args, "use_lora", False):
+        if trainer.args.should_save:
+            trainer.model.save_pretrained(output_dir)
+        return
+    
 
     if trainer.deepspeed:
         # DeepSpeed handles model saving automatically with proper state aggregation
@@ -372,13 +382,39 @@ def train(attn_implementation="flash_attention_2"):
     # Configure which model components to train based on arguments
     # 根據引數配置要訓練的模型元件
     set_model(model_args, model)
-
-    # Print trainable parameter information from rank 0 only
-    # 僅從排名0列印可訓練參數資訊
-    #這樣的效果是：分散式已初始化 → 只有 rank0 印；單卡/未初始化 → 也能印（不會爆）
-    if (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or (torch.distributed.get_rank() == 0):
-        model.visual.print_trainable_parameters()
-        model.model.print_trainable_parameters()
+    # Apply LoRA if requested
+    # 如果需要，套用 LoRA
+    if model_args.use_lora:
+        from peft import LoraConfig, get_peft_model, TaskType
+        target_modules = [m.strip() for m in model_args.lora_target_modules.split(",")]
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=model_args.lora_r,
+            lora_alpha=model_args.lora_alpha,
+            lora_dropout=model_args.lora_dropout,
+            bias=model_args.lora_bias,
+            target_modules=target_modules,
+        )
+        # NOTE: get_peft_model() AUTOMATICALLY re-freezes ALL base model weights
+        # (sets requires_grad=False), regardless of what set_model() / tune_mm_llm set above.
+        # Only the newly injected LoRA adapter parameters will have requires_grad=True.
+        # You do NOT need to set tune_mm_llm=False in the shell script when using LoRA.
+        # 注意：get_peft_model() 會自動將所有 base model 的 requires_grad 設為 False
+        # 不管 set_model() / tune_mm_llm 之前設定了什麼，peft 都會覆寫。
+        # 只有新注入的 LoRA adapter 參數的 requires_grad 會是 True。
+        model = get_peft_model(model, lora_config)
+        rank0_print(f"[LoRA] Applied LoRA with r={model_args.lora_r}, alpha={model_args.lora_alpha}")
+        rank0_print(f"[LoRA] Target modules: {target_modules}")
+        rank0_print("[LoRA] Base LLM weights are frozen by peft (requires_grad=False). Only LoRA adapters are trainable.")
+        if (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or (torch.distributed.get_rank() == 0):
+            model.print_trainable_parameters()
+    else:
+        # Print trainable parameter information from rank 0 only
+        # 僅從排名0列印可訓練參數資訊
+        #這樣的效果是：分散式已初始化 → 只有 rank0 印；單卡/未初始化 → 也能印（不會爆）
+        if (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or (torch.distributed.get_rank() == 0):
+            model.visual.print_trainable_parameters()
+            model.model.print_trainable_parameters()
 
     # Print model configuration for debugging
     # 列印模型配置以進行偵錯
@@ -426,7 +462,7 @@ def train(attn_implementation="flash_attention_2"):
 
     # Save final model using safe method (handles both DeepSpeed and regular training)
     # 使用安全方法儲存最終模型（處理 DeepSpeed 和一般訓練）
-    safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
+    safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir, model_args=model_args)
 
 
 # Entry point - start training with Flash Attention 2 for efficiency

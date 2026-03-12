@@ -181,6 +181,14 @@ declare -A MODEL_ARGS=(
   [geometry_encoder_path]="$GEOMETRY_ENCODER_PATH"
   [feature_fusion_method]="add"
   [geometry_encoder_random_init]="false"
+  #LORA 相關參數
+  [use_lora]="true"
+  [lora_r]="64"
+  [lora_alpha]="128"
+  [lora_dropout]="0.05"
+  [lora_bias]="none"
+  [lora_target_modules]="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+
 )
 
 declare -A DATA_ARGS=(

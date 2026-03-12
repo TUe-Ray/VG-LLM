@@ -20,6 +20,17 @@ class ModelArguments:
     geometry_merger_type: str = field(default="mlp")  # Type of geometry feature merger ("mlp", "avg")
     geometry_encoder_random_init: bool = field(default=False)  # Whether to randomly initialize the geometry encoder instead of loading pre-trained weights
 
+    # LoRA configuration
+    use_lora: bool = field(default=False)  # Whether to use LoRA (Low-Rank Adaptation) for finetuning
+    lora_r: int = field(default=64)  # LoRA rank
+    lora_alpha: int = field(default=128)  # LoRA alpha scaling factor
+    lora_dropout: float = field(default=0.05)  # LoRA dropout probability
+    lora_bias: str = field(default="none")  # LoRA bias type: 'none', 'all', or 'lora_only'
+    lora_target_modules: Optional[str] = field(
+        default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
+        metadata={"help": "Comma-separated list of module names to apply LoRA to."}
+    )
+
 @dataclass
 class DataArguments:
     dataset_use: str = field(default="")
