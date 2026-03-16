@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=baseline_0.25data_add
+#SBATCH --job-name=lora_0.25data_crossattn
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,7 +13,7 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088,lrdn0186
 #SBATCH --exclusive
 
-NOTE="baseline model for 0.25 data, add fusion, vggt geometry encoder, 4k max length, 1 epoch, lr 5e-6, cosine scheduler, warmup 3%, seed 0"
+NOTE="train lora with 0.25 data, Cross-Attention fusion, vggt geometry encoder, 4k max length, 1 epoch, lr 5e-6, cosine scheduler, warmup 3%, seed 0"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -179,14 +179,14 @@ declare -A MODEL_ARGS=(
   [use_geometry_encoder]="true"
   [geometry_encoder_type]="$GEOMETRY_ENCODER_TYPE"
   [geometry_encoder_path]="$GEOMETRY_ENCODER_PATH"
-  [feature_fusion_method]="add"
+  [feature_fusion_method]="cross_attention"
   [geometry_encoder_random_init]="false"
   #LORA 相關參數
-  [use_lora]="false"
-  [lora_r]="None"
-  [lora_alpha]="None"
-  [lora_dropout]="None"
-  [lora_bias]="None"
+  [use_lora]="true"
+  [lora_r]="64"
+  [lora_alpha]="128"
+  [lora_dropout]="0.05"
+  [lora_bias]="none"
   [lora_target_modules]="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
 
 )
