@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=dbg_makeSurework
+#SBATCH --job-name=lora_0.25data_add
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=32
-#SBATCH --time=00:20:00
+#SBATCH --time=14:00:00
 #SBATCH --partition=boost_usr_prod  
-#SBATCH --qos=boost_qos_dbg # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
+#SBATCH --qos=normal # normal/boost_qos_dbg/boost_qos_bprod/boost_qos_Iprod
 #SBATCH --output=logs/train/%x_%j.out
 #SBATCH --error=logs/train/%x_%j.err
 #SBATCH --mem=0
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088,lrdn0186
 #SBATCH --exclusive
 
-NOTE="make sure that new dataqwen works on main branch"
+NOTE="train lora with 0.25 data, add fusion, vggt geometry encoder, 4k max length, 1 epoch, lr 5e-6, cosine scheduler, warmup 3%, seed 0"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
@@ -204,6 +204,7 @@ declare -A DATA_ARGS=(
   [use_hdf5]="false"
   [hdf5_path]="None"
   [hdf5_num_shards]="32"
+  [dataset_fraction]="0.25"
 )
 
 declare -A TRAINING_ARGS=(

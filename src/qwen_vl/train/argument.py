@@ -43,6 +43,7 @@ class DataArguments:
     video_max_frame_pixels: int = field(default=32 * 28 * 28)
     video_min_frame_pixels: int = field(default=4 * 28 * 28)
     max_samples: int = field(default=-1)
+    dataset_fraction: float = field(default=1.0, metadata={"help": "Fraction of dataset to use (0.0 to 1.0). E.g., 0.25 for 1/4 of data. Doesn't affect seed determinism."})
     shuffle: bool = field(default=True)
     use_hdf5: bool = field(default=False)
     hdf5_path: Optional[str] = field(default=None)

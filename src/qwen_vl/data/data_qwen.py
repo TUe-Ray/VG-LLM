@@ -199,6 +199,16 @@ class LazySupervisedDataset(Dataset):
                 ann["tag"] = data["tag"]
             list_data_dict += annotations #=ist_data_dict.extend(annotations) ,把 annotations 裡的每一筆 sample加進 list_data_dict
 
+        print(f"Total training samples before dataset_fraction: {len(list_data_dict)}")
+        
+        # Apply dataset_fraction to use only a fraction of the total dataset
+        # This is applied AFTER loading and shuffling, so seed determinism is preserved
+        dataset_fraction = getattr(data_args, "dataset_fraction", 1.0)
+        if dataset_fraction < 1.0:
+            num_samples_to_use = int(len(list_data_dict) * dataset_fraction)
+            list_data_dict = list_data_dict[:num_samples_to_use]
+            rank0_print(f"Applied dataset_fraction={dataset_fraction}: using {len(list_data_dict)} samples")
+
         print(f"Total training samples: {len(list_data_dict)}")
 
         random.shuffle(list_data_dict)  # Randomly shuffle the data for training
