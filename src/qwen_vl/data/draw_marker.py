@@ -1,6 +1,52 @@
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import cv2
+import re
+
+
+OBJECT_LABEL_PATTERN = re.compile(r"^object\s*([A-Za-z]|\d+)$", re.IGNORECASE)
+
+
+def canonicalize_object_label(label):
+    if label is None:
+        return None
+    label = str(label).strip()
+    match = OBJECT_LABEL_PATTERN.fullmatch(label)
+    if match is None:
+        return label
+
+    suffix = match.group(1)
+    if suffix.isdigit():
+        return f"object{int(suffix)}"
+    return f"object{suffix.upper()}"
+
+
+def resolve_label_alias(label, marker_config=None):
+    normalized_label = canonicalize_object_label(label)
+    if marker_config is None:
+        return normalized_label
+    return marker_config.get("label_aliases", {}).get(normalized_label, normalized_label)
+
+
+def should_draw_labels(marker_config=None):
+    return marker_config is None or marker_config.get("draw_labels", True)
+
+
+def get_default_object_labels(data_entry):
+    task_type = data_entry.get("type")
+    if task_type == "spatial_imagination_map_mv":
+        return [f"object{i}" for i in range(len(data_entry["bbox_list"][0]))]
+    if task_type == "distance_infer_center_oo_video":
+        num_points = len(data_entry["point_list"][0])
+        labels = []
+        for i in range(num_points):
+            labels.append("objectA" if i == 0 else f"object{i-1}")
+        return labels
+    if task_type == "spatial_imagination_oo_video":
+        return ["object0", "object1", "object2", "object3"]
+    if task_type == "spatial_imagination_oc_video":
+        return ["object0", "object1", "object2"]
+    return []
 
 def scale_bbox(bbox, width, height):
     return (np.array(bbox[0]) / 1000) * np.array([width, height, width, height])
@@ -225,7 +271,7 @@ def draw_spatial_imagination_oo_mv(images, data_entry):
     draw = ImageDraw.Draw(image)
     draw_thick_bbox(draw, image, data_entry["yellow_bbox"], "yellow", stroke=20)
 
-def draw_spatial_imagination_map_mv(images, data_entry):
+def draw_spatial_imagination_map_mv(images, data_entry, marker_config=None):
     for i, bbox in enumerate(data_entry["bbox_list"][0]):
         img_idx = data_entry["bbox_img_idx"][0][i]
         image = images[img_idx]
@@ -236,17 +282,18 @@ def draw_spatial_imagination_map_mv(images, data_entry):
 
         cv2.rectangle(image, (bbox[0]-20, bbox[1]-20), (bbox[2]+20, bbox[3]+20), color=(0, 0, 255), thickness=20)
 
-        label = f"object{i}"
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 2.0
-        thickness = 10
-        text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
+        if should_draw_labels(marker_config):
+            label = resolve_label_alias(f"object{i}", marker_config)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 2.0
+            thickness = 10
+            text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
 
-        text_position = (bbox[2] - text_size[0], bbox[3] + text_size[1])
-        if text_position[1] > image.shape[0]:
-            text_position = (bbox[2] - text_size[0], bbox[3] - text_size[1])
+            text_position = (bbox[2] - text_size[0], bbox[3] + text_size[1])
+            if text_position[1] > image.shape[0]:
+                text_position = (bbox[2] - text_size[0], bbox[3] - text_size[1])
 
-        cv2.putText(image, label, text_position, font, font_scale, color=(0, 255, 0), thickness=thickness)
+            cv2.putText(image, label, text_position, font, font_scale, color=(0, 255, 0), thickness=thickness)
 
         images[img_idx] = Image.fromarray(image)
 
@@ -261,7 +308,7 @@ def draw_distance_prediction_oo_video(images, data_entry):
     draw = ImageDraw.Draw(image)
     draw_points(draw, image, data_entry, [("blue", "blue_point")])
 
-def draw_distance_infer_center_oo_video(images, data_entry):
+def draw_distance_infer_center_oo_video(images, data_entry, marker_config=None):
     for i, point in enumerate(data_entry["point_list"][0]):
         img_idx = data_entry["point_img_idx"][0][i]
         image = images[img_idx]
@@ -272,22 +319,20 @@ def draw_distance_infer_center_oo_video(images, data_entry):
 
         cv2.circle(image, point, radius=20, color=(0, 0, 255), thickness=-1)
 
-        if i == 0:
-            label = f"objectA"
-        else:
-            label = f"object{i-1}"
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 2.0
-        thickness = 10
-        text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
+        if should_draw_labels(marker_config):
+            label = "objectA" if i == 0 else f"object{i-1}"
+            label = resolve_label_alias(label, marker_config)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 2.0
+            thickness = 10
 
-        text_position = (point[0] + 20, point[1] + 20)
+            text_position = (point[0] + 20, point[1] + 20)
 
-        cv2.putText(image, label, text_position, font, font_scale, color=(0, 255, 0), thickness=thickness)
+            cv2.putText(image, label, text_position, font, font_scale, color=(0, 255, 0), thickness=thickness)
 
         images[img_idx] = Image.fromarray(image)
 
-def draw_spatial_imagination_oo_video(images, data_entry):
+def draw_spatial_imagination_oo_video(images, data_entry, marker_config=None):
     image_indices = data_entry["bbox_img_idx"][0]
     
     bboxes_info = [
@@ -318,39 +363,40 @@ def draw_spatial_imagination_oo_video(images, data_entry):
                       color=bbox_info["color"], 
                       thickness=20)
         
-        label = bbox_info["label"]
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 2.0
-        thickness_text = 10
-        text_size, _ = cv2.getTextSize(label, font, font_scale, thickness_text)
-        
-        text_x = bbox_tuple[2] - text_size[0]
-        text_y = bbox_tuple[3] + text_size[1]
-        
-        if text_y > image_np.shape[0]:
-            text_y = bbox_tuple[3] - 5
-        
-        text_position = (text_x, text_y)
-        
-        cv2.rectangle(image_np, 
-                      (text_x, text_y - text_size[1]), 
-                      (text_x + text_size[0], text_y + 5), 
-                      bbox_info["color"], 
-                      cv2.FILLED)
-        
-        cv2.putText(image_np, 
-                    label, 
-                    text_position, 
-                    font, 
-                    font_scale, 
-                    (255, 255, 255),
-                    thickness_text, 
-                    cv2.LINE_AA)
+        if should_draw_labels(marker_config):
+            label = resolve_label_alias(bbox_info["label"], marker_config)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 2.0
+            thickness_text = 10
+            text_size, _ = cv2.getTextSize(label, font, font_scale, thickness_text)
+            
+            text_x = bbox_tuple[2] - text_size[0]
+            text_y = bbox_tuple[3] + text_size[1]
+            
+            if text_y > image_np.shape[0]:
+                text_y = bbox_tuple[3] - 5
+            
+            text_position = (text_x, text_y)
+            
+            cv2.rectangle(image_np, 
+                          (text_x, text_y - text_size[1]), 
+                          (text_x + text_size[0], text_y + 5), 
+                          bbox_info["color"], 
+                          cv2.FILLED)
+            
+            cv2.putText(image_np, 
+                        label, 
+                        text_position, 
+                        font, 
+                        font_scale, 
+                        (255, 255, 255),
+                        thickness_text, 
+                        cv2.LINE_AA)
         
         image_pil = Image.fromarray(cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB))
         images[img_idx] = image_pil
 
-def draw_spatial_imagination_oc_video(images, data_entry):
+def draw_spatial_imagination_oc_video(images, data_entry, marker_config=None):
     image_indices = data_entry["bbox_img_idx"][0]
     
     bboxes_info = [
@@ -380,34 +426,35 @@ def draw_spatial_imagination_oc_video(images, data_entry):
                       color=bbox_info["color"], 
                       thickness=20)
         
-        label = bbox_info["label"]
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 2.0
-        thickness_text = 10
-        text_size, _ = cv2.getTextSize(label, font, font_scale, thickness_text)
-        
-        text_x = bbox_tuple[2] - text_size[0]
-        text_y = bbox_tuple[3] + text_size[1]
-        
-        if text_y > image_np.shape[0]:
-            text_y = bbox_tuple[3] - 5
-        
-        text_position = (text_x, text_y)
-        
-        cv2.rectangle(image_np, 
-                      (text_x, text_y - text_size[1]), 
-                      (text_x + text_size[0], text_y + 5), 
-                      bbox_info["color"], 
-                      cv2.FILLED)
-        
-        cv2.putText(image_np, 
-                    label, 
-                    text_position, 
-                    font, 
-                    font_scale, 
-                    (255, 255, 255),
-                    thickness_text, 
-                    cv2.LINE_AA)
+        if should_draw_labels(marker_config):
+            label = resolve_label_alias(bbox_info["label"], marker_config)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 2.0
+            thickness_text = 10
+            text_size, _ = cv2.getTextSize(label, font, font_scale, thickness_text)
+            
+            text_x = bbox_tuple[2] - text_size[0]
+            text_y = bbox_tuple[3] + text_size[1]
+            
+            if text_y > image_np.shape[0]:
+                text_y = bbox_tuple[3] - 5
+            
+            text_position = (text_x, text_y)
+            
+            cv2.rectangle(image_np, 
+                          (text_x, text_y - text_size[1]), 
+                          (text_x + text_size[0], text_y + 5), 
+                          bbox_info["color"], 
+                          cv2.FILLED)
+            
+            cv2.putText(image_np, 
+                        label, 
+                        text_position, 
+                        font, 
+                        font_scale, 
+                        (255, 255, 255),
+                        thickness_text, 
+                        cv2.LINE_AA)
         
         image_pil = Image.fromarray(cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB))
         images[img_idx] = image_pil

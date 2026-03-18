@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=lora_0.25data_crossattn
+#SBATCH --job-name=ablation_A_025data
 #SBATCH --nodes=2
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=1
@@ -13,13 +13,42 @@
 #SBATCH --exclude=lrdn0249,lrdn0612,lrdn0568,lrdn2400,lrdn0288,lrdn0418,lrdn0119,lrdn0159,lrdn0080,lrdn0868,lrdn0808,lrdn0182,lrdn0680,lrdn0831,lrdn0084,lrdn0088,lrdn0186
 #SBATCH --exclusive
 
-NOTE="train lora with 0.25 data, Cross-Attention fusion, vggt geometry encoder, 4k max length, 1 epoch, lr 5e-6, cosine scheduler, warmup 3%, seed 0"
+DATASETS="spar_234k,llava_hound_64k"
+LR="5e-6"
+SPATIAL_ABLATION_MODE="A"  # A/B/C/D/E
+SPATIAL_ABLATION_SEED="0"
+
+case "${SPATIAL_ABLATION_MODE^^}" in
+  A)
+    SPATIAL_ABLATION_MODE="A"
+    SPATIAL_ABLATION_DESC="baseline overlays"
+    ;;
+  B)
+    SPATIAL_ABLATION_MODE="B"
+    SPATIAL_ABLATION_DESC="keep color box/point, remove image labels"
+    ;;
+  C)
+    SPATIAL_ABLATION_MODE="C"
+    SPATIAL_ABLATION_DESC="replace object ids with stable random aliases"
+    ;;
+  D)
+    SPATIAL_ABLATION_MODE="D"
+    SPATIAL_ABLATION_DESC="remove all image-side spatial marks"
+    ;;
+  E)
+    SPATIAL_ABLATION_MODE="E"
+    SPATIAL_ABLATION_DESC="textualize spar_info and remove image-side marks"
+    ;;
+  *)
+    echo "[ERROR] Unsupported SPATIAL_ABLATION_MODE: $SPATIAL_ABLATION_MODE"
+    exit 1
+    ;;
+esac
+
+NOTE="Ablation Study with 0.25 data, ADD fusion, vggt geometry encoder, 4k max length, 1 epoch, lr 5e-6, cosine scheduler, warmup 3%, seed 0 | spatial ablation ${SPATIAL_ABLATION_MODE}: ${SPATIAL_ABLATION_DESC}"
 
 echo "-------- Note --------"
 echo "  note: $NOTE"
-
-DATASETS="spar_234k,llava_hound_64k"
-LR="5e-6"
 
 echo "=== SLURM Job Specifications ==="
 echo "Job Name: $SLURM_JOB_NAME"
@@ -42,8 +71,9 @@ MODEL_PATH="$FAST/hf_models/qwen2_5_3b"
 GEOMETRY_ENCODER_TYPE="vggt"          
 GEOMETRY_ENCODER_PATH="$FAST/hf_models/vggt" 
 
-OUTPUT_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/checkpoints"                   # Directory for saving checkpoints
-CACHE_DIR="$FAST/hf_models/train/${SLURM_JOB_NAME}/cache"                        # [TrainingArguments] Cache directory for models
+RUN_ROOT="$FAST/hf_models/train/ablation/ablation_${SPATIAL_ABLATION_MODE}"
+OUTPUT_DIR="$RUN_ROOT/checkpoints"                   # Directory for saving checkpoints
+CACHE_DIR="$RUN_ROOT/cache"                        # [TrainingArguments] Cache directory for models
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 PER_DEVICE_BS=1
@@ -54,6 +84,9 @@ echo "=== Job Configuration ==="
 echo "MODEL_PATH: $MODEL_PATH"
 echo "GEOMETRY_ENCODER_TYPE: $GEOMETRY_ENCODER_TYPE"
 echo "GEOMETRY_ENCODER_PATH: $GEOMETRY_ENCODER_PATH"
+echo "SPATIAL_ABLATION_MODE: $SPATIAL_ABLATION_MODE"
+echo "SPATIAL_ABLATION_DESC: $SPATIAL_ABLATION_DESC"
+echo "SPATIAL_ABLATION_SEED: $SPATIAL_ABLATION_SEED"
 echo "PER_DEVICE_BS: $PER_DEVICE_BS"
 echo "TOTAL_BATCH_SIZE: $TOTAL_BATCH_SIZE"
 
@@ -182,10 +215,10 @@ declare -A MODEL_ARGS=(
   [feature_fusion_method]="cross_attention"
   [geometry_encoder_random_init]="false"
   #LORA 相關參數
-  [use_lora]="true"
-  [lora_r]="64"
-  [lora_alpha]="128"
-  [lora_dropout]="0.05"
+  [use_lora]="False"
+  [lora_r]="0"
+  [lora_alpha]="0"
+  [lora_dropout]="0"
   [lora_bias]="none"
   [lora_target_modules]="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
 
@@ -205,6 +238,8 @@ declare -A DATA_ARGS=(
   [hdf5_path]="None"
   [hdf5_num_shards]="32"
   [dataset_fraction]="0.25"
+  [spatial_ablation_mode]="$SPATIAL_ABLATION_MODE"
+  [spatial_ablation_seed]="$SPATIAL_ABLATION_SEED"
 )
 
 declare -A TRAINING_ARGS=(

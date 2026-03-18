@@ -11,10 +11,24 @@ NPROC_PER_NODE=$(nvidia-smi --list-gpus | wc -l)  # Automatically detects availa
 # ======================
 # Path Configuration
 # ======================
+SPATIAL_ABLATION_MODE="${SPATIAL_ABLATION_MODE:-A}"
+SPATIAL_ABLATION_SEED="${SPATIAL_ABLATION_SEED:-0}"
 MODEL_PATH="Qwen/Qwen2.5-VL-7B-Instruct/"  # [ModelArguments] Pretrained model path
 GEOMETRY_ENCODER_TYPE="vggt"
 GEOMETRY_ENCODER_PATH="facebook/VGGT-1B"
-OUTPUT_DIR="PATH_TO_OUTPUT_DIR"                   # Directory for saving checkpoints
+case "${SPATIAL_ABLATION_MODE^^}" in
+  A) SPATIAL_ABLATION_MODE="A" ;;
+  B) SPATIAL_ABLATION_MODE="B" ;;
+  C) SPATIAL_ABLATION_MODE="C" ;;
+  D) SPATIAL_ABLATION_MODE="D" ;;
+  E) SPATIAL_ABLATION_MODE="E" ;;
+  *)
+    echo "[ERROR] Unsupported SPATIAL_ABLATION_MODE: $SPATIAL_ABLATION_MODE"
+    exit 1
+    ;;
+esac
+
+OUTPUT_DIR="PATH_TO_OUTPUT_DIR/spatial_${SPATIAL_ABLATION_MODE}"                   # Directory for saving checkpoints
 CACHE_DIR="./cache"                        # [TrainingArguments] Cache directory for models
 mkdir -p $OUTPUT_DIR
 
@@ -57,6 +71,8 @@ torchrun --nproc_per_node=$NPROC_PER_NODE \
             --video_min_frames 4 \
             --video_max_frame_pixels $((1664*28*28)) \
             --video_min_frame_pixels $((256*28*28)) \
+            --spatial_ablation_mode $SPATIAL_ABLATION_MODE \
+            --spatial_ablation_seed $SPATIAL_ABLATION_SEED \
             --num_train_epochs 1 \
             --warmup_ratio 0.03 \
             --lr_scheduler_type "cosine" \

@@ -7,6 +7,7 @@ import re
 import time
 import math
 import itertools
+import inspect
 import ast
 import hashlib
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ from decord import VideoReader
 import transformers
 
 from . import data_list
+from .draw_marker import DRAW_FUNCTIONS, canonicalize_object_label, get_default_object_labels
 from .rope2d import get_rope_index_25, get_rope_index_2
 from .utils import prepare_image_inputs
 
@@ -54,6 +56,42 @@ IMAGE_TOKEN_INDEX = 151655
 VIDEO_TOKEN_INDEX = 151656
 DEFAULT_IMAGE_TOKEN = "<image>"
 DEFAULT_VIDEO_TOKEN = "<video>"
+SPATIAL_ABLATION_MODE_ALIASES = {
+    "A": "A",
+    "BASELINE": "A",
+    "B": "B",
+    "COLOR_ONLY": "B",
+    "C": "C",
+    "RANDOM_ALIAS": "C",
+    "RANDOM_ID": "C",
+    "D": "D",
+    "NO_VISUAL_MARKS": "D",
+    "E": "E",
+    "TEXTUAL_SPAR_INFO": "E",
+}
+OBJECT_REF_PATTERN = re.compile(r"\bobject\s*([A-Za-z]|\d+)\b", re.IGNORECASE)
+SPATIAL_ALIAS_WORDS = (
+    "anchor",
+    "banana",
+    "cactus",
+    "comet",
+    "ember",
+    "harbor",
+    "kiwi",
+    "lantern",
+    "maple",
+    "nebula",
+    "orbit",
+    "pebble",
+    "puzzle",
+    "quartz",
+    "raven",
+    "ribbon",
+    "sunset",
+    "velvet",
+    "walnut",
+    "zephyr",
+)
 
 local_rank = None
 
@@ -61,6 +99,32 @@ local_rank = None
 def rank0_print(*args):
     if local_rank == 0:
         print(*args)
+
+
+def normalize_spatial_ablation_mode(mode: Optional[str]) -> str:
+    normalized_mode = SPATIAL_ABLATION_MODE_ALIASES.get((mode or "A").strip().upper())
+    if normalized_mode is None:
+        valid_modes = ", ".join(sorted(set(SPATIAL_ABLATION_MODE_ALIASES.values())))
+        raise ValueError(
+            f"Unsupported spatial_ablation_mode='{mode}'. Supported modes: {valid_modes}."
+        )
+    return normalized_mode
+
+
+def build_textual_spar_info(info: Optional[Dict]) -> str:
+    if not info:
+        return "Spatial grounding metadata: none."
+
+    parts = [f"type={info.get('type', 'unknown')}"]
+    for key in sorted(k for k in info.keys() if k != "type"):
+        parts.append(
+            f"{key}={json.dumps(info[key], ensure_ascii=True, sort_keys=True, separators=(',', ':'))}"
+        )
+    return (
+        "Spatial grounding metadata (normalized coordinates are in the [0, 1000] range): "
+        + "; ".join(parts)
+        + "."
+    )
 
 
 def read_jsonl(path, max_samples: int=-1):
@@ -217,6 +281,10 @@ class LazySupervisedDataset(Dataset):
         self.tokenizer = tokenizer
         self.list_data_dict = list_data_dict
         self.data_args = data_args
+        self.spatial_ablation_mode = normalize_spatial_ablation_mode(
+            getattr(data_args, "spatial_ablation_mode", "A")
+        )
+        self.spatial_ablation_seed = getattr(data_args, "spatial_ablation_seed", 0)
         self.data_args.image_processor.max_pixels = data_args.max_pixels
         self.data_args.image_processor.min_pixels = data_args.min_pixels
         self.data_args.image_processor.size["longest_edge"] = data_args.max_pixels
@@ -237,6 +305,120 @@ class LazySupervisedDataset(Dataset):
             if os.path.isfile(index_path):
                 with gzip.open(index_path, "rt", encoding="utf-8") as fh:
                     self.video_frames_index = json.load(fh)
+
+    def _get_conv_text(self, conv: Dict) -> str:
+        if "value" in conv:
+            return conv["value"]
+        return conv.get("content", "")
+
+    def _set_conv_text(self, conv: Dict, text: str) -> None:
+        if "value" in conv:
+            conv["value"] = text
+        else:
+            conv["content"] = text
+
+    def _collect_object_labels_from_conversations(self, conversations: List[Dict]) -> List[str]:
+        labels = []
+        for conv in conversations:
+            text = self._get_conv_text(conv)
+            for match in OBJECT_REF_PATTERN.finditer(text):
+                labels.append(canonicalize_object_label(f"object{match.group(1)}"))
+        return list(dict.fromkeys(label for label in labels if label))
+
+    def _rewrite_conversation_object_labels(
+        self, conversations: List[Dict], label_aliases: Dict[str, str]
+    ) -> None:
+        if not label_aliases:
+            return
+
+        def replace(match):
+            label = canonicalize_object_label(f"object{match.group(1)}")
+            return label_aliases.get(label, match.group(0))
+
+        for conv in conversations:
+            text = self._get_conv_text(conv)
+            self._set_conv_text(conv, OBJECT_REF_PATTERN.sub(replace, text))
+
+    def _build_random_label_aliases(
+        self, sample: Dict, spar_info: Optional[Dict], sample_index: int
+    ) -> Dict[str, str]:
+        labels = self._collect_object_labels_from_conversations(sample["conversations"])
+        if spar_info is not None:
+            labels.extend(get_default_object_labels(spar_info))
+        labels = list(dict.fromkeys(canonicalize_object_label(label) for label in labels if label))
+        if not labels:
+            return {}
+
+        seed_payload = {
+            "sample_index": sample_index,
+            "spar_info": spar_info,
+            "conversations": [self._get_conv_text(conv) for conv in sample["conversations"]],
+        }
+        sample_seed = hashlib.md5(
+            f"{self.spatial_ablation_seed}:{json.dumps(seed_payload, sort_keys=True, ensure_ascii=True, default=str)}".encode()
+        ).hexdigest()
+        rng = random.Random(int(sample_seed, 16))
+
+        label_aliases = {}
+        used_aliases = set()
+        for label in labels:
+            while True:
+                alias = f"{rng.choice(SPATIAL_ALIAS_WORDS)}{rng.randint(0, 99):02d}"
+                if alias not in used_aliases:
+                    used_aliases.add(alias)
+                    label_aliases[label] = alias
+                    break
+        return label_aliases
+
+    def _append_textual_spar_info_to_prompt(
+        self, conversations: List[Dict], spar_info: Optional[Dict]
+    ) -> None:
+        if not spar_info:
+            return
+
+        grounding_text = build_textual_spar_info(spar_info)
+        for conv in conversations:
+            role = conv.get("from", conv.get("role", ""))
+            if role not in ["human", "user"]:
+                continue
+            text = self._get_conv_text(conv).rstrip()
+            if grounding_text in text:
+                return
+            suffix = f"\n\n{grounding_text}" if text else grounding_text
+            self._set_conv_text(conv, text + suffix)
+            return
+
+    def _prepare_spatial_ablation(
+        self, sample: Dict, sample_index: int
+    ) -> Tuple[Optional[Dict], Dict]:
+        spar_info = sample.get("spar_info")
+        if spar_info is None:
+            return None, {"draw_marks": True, "draw_labels": True, "label_aliases": {}}
+
+        if isinstance(spar_info, str):
+            spar_info = json.loads(spar_info)
+        else:
+            spar_info = copy.deepcopy(spar_info)
+
+        marker_config = {"draw_marks": True, "draw_labels": True, "label_aliases": {}}
+        if self.spatial_ablation_mode == "B":
+            marker_config["draw_labels"] = False
+        elif self.spatial_ablation_mode == "C":
+            marker_config["label_aliases"] = self._build_random_label_aliases(
+                sample, spar_info, sample_index
+            )
+            self._rewrite_conversation_object_labels(
+                sample["conversations"], marker_config["label_aliases"]
+            )
+        elif self.spatial_ablation_mode == "D":
+            marker_config["draw_marks"] = False
+            marker_config["draw_labels"] = False
+        elif self.spatial_ablation_mode == "E":
+            marker_config["draw_marks"] = False
+            marker_config["draw_labels"] = False
+            self._append_textual_spar_info_to_prompt(sample["conversations"], spar_info)
+
+        return spar_info, marker_config
 
     def __len__(self):
         return len(self.list_data_dict)
@@ -345,18 +527,22 @@ class LazySupervisedDataset(Dataset):
         grid_thw = visual_processed["image_grid_thw"][0]
         return image_tensor, grid_thw
     
-    def draw_visual_marks(self, images, spar_info):
+    def draw_visual_marks(self, images, spar_info, marker_config=None):
 
         if spar_info is None:
             return
-        info = json.loads(spar_info)
+        if marker_config is not None and not marker_config.get("draw_marks", True):
+            return
+
+        info = spar_info if isinstance(spar_info, dict) else json.loads(spar_info)
         task_type = info["type"]
-        from .draw_marker import DRAW_FUNCTIONS
         draw_fn = DRAW_FUNCTIONS[task_type]
-        if len(images) == 1:
-            draw_fn(images[0], info)
+        draw_target = images[0] if len(images) == 1 else images
+
+        if marker_config is not None and "marker_config" in inspect.signature(draw_fn).parameters:
+            draw_fn(draw_target, info, marker_config=marker_config)
         else:
-            draw_fn(images, info)
+            draw_fn(draw_target, info)
         # for j, img in enumerate(images):
         #     # write to local
         #     img.save(f"images/img_{j}.jpg", format="JPEG")
@@ -537,6 +723,8 @@ class LazySupervisedDataset(Dataset):
         if "images" in sample:
             sample["image"] = sample["images"]
 
+        spar_info, marker_config = self._prepare_spatial_ablation(sample, sample_index=i)
+
         if "image" in sample:
             image_folder = sample["data_path"]
             image_file = sample["image"]
@@ -560,7 +748,7 @@ class LazySupervisedDataset(Dataset):
             else:
                 raise NotImplementedError
 
-            self.draw_visual_marks(image_file, sample.get("spar_info", None))
+            self.draw_visual_marks(image_file, spar_info, marker_config=marker_config)
 
             image, grid_thw, geometry_encoder_inputs = [], [], []
             for file in image_file:

@@ -47,7 +47,10 @@ from trainer import replace_qwen2_vl_attention_class
 from transformers import (
     Qwen2VLForConditionalGeneration,
 )
-from qwen_vl.data.data_qwen import make_supervised_data_module
+from qwen_vl.data.data_qwen import (
+    make_supervised_data_module,
+    normalize_spatial_ablation_mode,
+)
 
 from qwen_vl.train.argument import (
     ModelArguments,
@@ -203,6 +206,9 @@ def train(attn_implementation="flash_attention_2"):
         (ModelArguments, DataArguments, TrainingArguments)
     )
     model_args, data_args, training_args= parser.parse_args_into_dataclasses()
+    data_args.spatial_ablation_mode = normalize_spatial_ablation_mode(
+        data_args.spatial_ablation_mode
+    )
 
 
     
@@ -237,6 +243,10 @@ def train(attn_implementation="flash_attention_2"):
     # Set local rank for distributed training coordination
     # 設定本機排名以協調分散式訓練
     local_rank = training_args.local_rank
+    rank0_print(
+        f"[Data] spatial_ablation_mode={data_args.spatial_ablation_mode}, "
+        f"spatial_ablation_seed={data_args.spatial_ablation_seed}"
+    )
     
     # Explicitly initialize W&B for both online and offline modes
     # This ensures proper logging even with LoRA enabled in distributed training
