@@ -49,8 +49,6 @@ from transformers import (
 )
 from qwen_vl.data.data_qwen import make_supervised_data_module
 
-import wandb
-
 from qwen_vl.train.argument import (
     ModelArguments,
     DataArguments,
@@ -242,29 +240,29 @@ def train(attn_implementation="flash_attention_2"):
     
     # Explicitly initialize W&B for both online and offline modes
     # This ensures proper logging even with LoRA enabled in distributed training
-    # 明確初始化 W&B，適用於線上和離線模式
-    # 這確保即使在分散式訓練中啟用 LoRA，也能進行適當的日誌記錄
-    if local_rank == 0:
-        # Only initialize on rank 0 to avoid conflicts in multi-GPU training
-        # 僅在 rank 0 上初始化以避免多 GPU 訓練中的衝突
-        try:
-            if "wandb" in training_args.report_to:
-                wandb.init(
-                    project="vg-llm",
-                    name=training_args.run_name,
-                    config={
-                        "model": model_args.model_name_or_path,
-                        "datasets": data_args.dataset_use,
-                        "use_lora": model_args.use_lora,
-                        "learning_rate": training_args.learning_rate,
-                        "batch_size": training_args.per_device_train_batch_size,
-                        "dataset_fraction": getattr(data_args, "dataset_fraction", 1.0),
-                    },
-                    resume="allow",  # Allow resuming if interrupted
-                )
-                rank0_print(f"[W&B] Initialized run: {wandb.run.name}")
-        except Exception as e:
-            rank0_print(f"[W&B] Warning: Failed to initialize wandb: {e}")
+    # # 明確初始化 W&B，適用於線上和離線模式
+    # # 這確保即使在分散式訓練中啟用 LoRA，也能進行適當的日誌記錄
+    # if local_rank == 0:
+    #     # Only initialize on rank 0 to avoid conflicts in multi-GPU training
+    #     # 僅在 rank 0 上初始化以避免多 GPU 訓練中的衝突
+    #     try:
+    #         if "wandb" in training_args.report_to:
+    #             wandb.init(
+    #                 project="vg-llm",
+    #                 name=training_args.run_name,
+    #                 config={
+    #                     "model": model_args.model_name_or_path,
+    #                     "datasets": data_args.dataset_use,
+    #                     "use_lora": model_args.use_lora,
+    #                     "learning_rate": training_args.learning_rate,
+    #                     "batch_size": training_args.per_device_train_batch_size,
+    #                     "dataset_fraction": getattr(data_args, "dataset_fraction", 1.0),
+    #                 },
+    #                 resume="allow",  # Allow resuming if interrupted
+    #             )
+    #             rank0_print(f"[W&B] Initialized run: {wandb.run.name}")
+    #     except Exception as e:
+    #         rank0_print(f"[W&B] Warning: Failed to initialize wandb: {e}")
     
     # Create output directory if it doesn't exist
     # 如果輸出目錄不存在則建立
@@ -494,12 +492,12 @@ def train(attn_implementation="flash_attention_2"):
     
     # Finalize W&B logging to ensure all metrics are synced
     # 完成 W&B 日誌記錄以確保所有指標都已同步
-    if local_rank == 0 and "wandb" in training_args.report_to:
-        try:
-            wandb.finish()
-            rank0_print("[W&B] Training run completed and synced.")
-        except Exception as e:
-            rank0_print(f"[W&B] Warning: Failed to finish wandb: {e}")
+    # if local_rank == 0 and "wandb" in training_args.report_to:
+    #     try:
+    #         wandb.finish()
+    #         rank0_print("[W&B] Training run completed and synced.")
+    #     except Exception as e:
+    #         rank0_print(f"[W&B] Warning: Failed to finish wandb: {e}")
 
 
 # Entry point - start training with Flash Attention 2 for efficiency
