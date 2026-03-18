@@ -45,6 +45,7 @@ AVAILABLE_MODELS = {
     "qwen2vl": "Qwen2VL",
     "qwen2_5_vl": "Qwen2_5_VL",
     "vgllm": "VGLLM",
+    "vgllm_peft": "VGLLM_PEFT",
 }
 
 
